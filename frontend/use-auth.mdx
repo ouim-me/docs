@@ -1,0 +1,499 @@
+---
+title: 'useAuth'
+description: 'React hook for accessing authentication state and methods'
+icon: 'code'
+---
+
+## Overview
+
+The `useAuth` hook provides access to the current user's authentication state and authentication methods. It also supports middleware for route protection and automatic redirects.
+
+## Installation
+
+```bash
+npm install simple-logto
+```
+
+## Basic Usage
+
+```tsx
+import { useAuth } from '@ouim/simple-logto'
+
+function MyComponent() {
+  const { user, isLoadingUser, signIn, signOut } = useAuth()
+  
+  if (isLoadingUser) {
+    return <div>Loading...</div>
+  }
+  
+  if (user) {
+    return (
+      <div>
+        <p>Welcome, {user.name}!</p>
+        <button onClick={() => signOut()}>Sign Out</button>
+      </div>
+    )
+  }
+  
+  return <button onClick={() => signIn()}>Sign In</button>
+}
+```
+
+## Parameters
+
+The hook accepts an optional `options` object:
+
+<ParamField path="options" type="AuthOptions">
+  Configuration object for authentication behavior and route protection.
+  
+  <Expandable title="AuthOptions properties">
+    <ParamField path="middleware" type="'auth' | 'guest' | undefined">
+      Route protection middleware type:
+      - `'auth'`: Requires authentication (redirects unauthenticated users)
+      - `'guest'`: Guest-only route (redirects authenticated users)
+      - `undefined`: No protection
+      
+      ```tsx
+      const { user } = useAuth({ middleware: 'auth' })
+      ```
+    </ParamField>
+    
+    <ParamField path="redirectTo" type="string">
+      URL to redirect to when `middleware: 'auth'` and user is not authenticated.
+      
+      ```tsx
+      const { user } = useAuth({
+        middleware: 'auth',
+        redirectTo: '/login'
+      })
+      ```
+    </ParamField>
+    
+    <ParamField path="redirectIfAuthenticated" type="string">
+      URL to redirect to when `middleware: 'guest'` and user is authenticated.
+      
+      ```tsx
+      const { user } = useAuth({
+        middleware: 'guest',
+        redirectIfAuthenticated: '/dashboard'
+      })
+      ```
+    </ParamField>
+    
+    <ParamField path="navigationOptions" type="NavigationOptions">
+      Options for navigation behavior.
+      
+      <Expandable title="NavigationOptions properties">
+        <ParamField path="replace" type="boolean">
+          Use replaceState instead of pushState
+        </ParamField>
+        
+        <ParamField path="force" type="boolean">
+          Force navigation even if already on the same page
+        </ParamField>
+      </Expandable>
+      
+      ```tsx
+      const { user } = useAuth({
+        middleware: 'auth',
+        redirectTo: '/login',
+        navigationOptions: { replace: true }
+      })
+      ```
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Return Value
+
+The hook returns an `AuthContextType` object:
+
+```typescript
+interface AuthContextType {
+  user: LogtoUser | null
+  isLoadingUser: boolean
+  signIn: (callbackUrl?: string, usePopup?: boolean) => Promise<void>
+  signOut: (options?: { callbackUrl?: string; global?: boolean }) => Promise<void>
+  refreshAuth: () => Promise<void>
+  enablePopupSignIn?: boolean
+}
+```
+
+<ParamField path="user" type="LogtoUser | null">
+  Current authenticated user object, or `null` if not authenticated.
+  
+  ```typescript
+  type LogtoUser = {
+    id: string
+    name?: string
+    email?: string
+    avatar?: string
+    [key: string]: any
+  }
+  ```
+</ParamField>
+
+<ParamField path="isLoadingUser" type="boolean">
+  Loading state indicator. `true` while fetching user data, `false` when complete.
+</ParamField>
+
+<ParamField path="signIn" type="(callbackUrl?: string, usePopup?: boolean) => Promise<void>">
+  Function to initiate sign-in flow.
+  
+  - `callbackUrl`: Optional URL to redirect to after authentication
+  - `usePopup`: Override the `enablePopupSignIn` setting from `AuthProvider`
+  
+  ```tsx
+  // Default sign-in
+  await signIn()
+  
+  // With custom callback URL
+  await signIn('/dashboard')
+  
+  // Force popup mode
+  await signIn('/callback', true)
+  
+  // Force redirect mode
+  await signIn('/callback', false)
+  ```
+</ParamField>
+
+<ParamField path="signOut" type="(options?: { callbackUrl?: string; global?: boolean }) => Promise<void>">
+  Function to sign out the current user.
+  
+  - `callbackUrl`: Optional URL to redirect to after sign-out
+  - `global`: Whether to perform global sign-out (default: `true`)
+  
+  ```tsx
+  // Default global sign-out
+  await signOut()
+  
+  // With custom redirect
+  await signOut({ callbackUrl: '/goodbye' })
+  
+  // Local sign-out only
+  await signOut({ global: false })
+  
+  // Local sign-out with redirect
+  await signOut({ callbackUrl: '/login', global: false })
+  ```
+</ParamField>
+
+<ParamField path="refreshAuth" type="() => Promise<void>">
+  Function to manually refresh the authentication state.
+  
+  ```tsx
+  // Refresh user data
+  await refreshAuth()
+  ```
+</ParamField>
+
+<ParamField path="enablePopupSignIn" type="boolean | undefined">
+  Whether popup sign-in is enabled (from `AuthProvider` configuration).
+</ParamField>
+
+## Examples
+
+### Display User Information
+
+```tsx
+import { useAuth } from '@ouim/simple-logto'
+
+function UserProfile() {
+  const { user, isLoadingUser } = useAuth()
+  
+  if (isLoadingUser) {
+    return <div>Loading user...</div>
+  }
+  
+  if (!user) {
+    return <div>Please sign in</div>
+  }
+  
+  return (
+    <div>
+      <img src={user.avatar} alt={user.name} />
+      <h2>{user.name}</h2>
+      <p>{user.email}</p>
+      <p>User ID: {user.id}</p>
+    </div>
+  )
+}
+```
+
+### Protected Page
+
+```tsx
+import { useAuth } from '@ouim/simple-logto'
+
+export default function DashboardPage() {
+  const { user } = useAuth({
+    middleware: 'auth',
+    redirectTo: '/login'
+  })
+  
+  // No need to check if user exists - middleware handles it
+  return (
+    <div>
+      <h1>Dashboard</h1>
+      <p>Welcome, {user?.name}!</p>
+    </div>
+  )
+}
+```
+
+### Guest-Only Page
+
+```tsx
+import { useAuth } from '@ouim/simple-logto'
+
+export default function LoginPage() {
+  const { signIn } = useAuth({
+    middleware: 'guest',
+    redirectIfAuthenticated: '/dashboard'
+  })
+  
+  return (
+    <div>
+      <h1>Sign In</h1>
+      <button onClick={() => signIn()}>Sign in with Logto</button>
+    </div>
+  )
+}
+```
+
+### Custom Sign-In Button
+
+```tsx
+import { useAuth } from '@ouim/simple-logto'
+
+function SignInButton() {
+  const { signIn, isLoadingUser } = useAuth()
+  
+  return (
+    <button
+      onClick={() => signIn('/dashboard', true)} // Use popup
+      disabled={isLoadingUser}
+    >
+      {isLoadingUser ? 'Loading...' : 'Sign In'}
+    </button>
+  )
+}
+```
+
+### Sign-Out with Confirmation
+
+```tsx
+import { useAuth } from '@ouim/simple-logto'
+
+function SignOutButton() {
+  const { signOut } = useAuth()
+  
+  const handleSignOut = async () => {
+    if (confirm('Are you sure you want to sign out?')) {
+      await signOut({ callbackUrl: '/' })
+    }
+  }
+  
+  return <button onClick={handleSignOut}>Sign Out</button>
+}
+```
+
+### Conditional Rendering
+
+```tsx
+import { useAuth } from '@ouim/simple-logto'
+
+function Navigation() {
+  const { user, signIn, signOut } = useAuth()
+  
+  return (
+    <nav>
+      <a href="/">Home</a>
+      {user ? (
+        <>
+          <a href="/dashboard">Dashboard</a>
+          <a href="/profile">Profile</a>
+          <button onClick={() => signOut()}>Sign Out</button>
+        </>
+      ) : (
+        <button onClick={() => signIn()}>Sign In</button>
+      )}
+    </nav>
+  )
+}
+```
+
+### Manual Auth Refresh
+
+```tsx
+import { useAuth } from '@ouim/simple-logto'
+
+function ProfilePage() {
+  const { user, refreshAuth } = useAuth({ middleware: 'auth' })
+  
+  const handleProfileUpdate = async () => {
+    // Update profile via API
+    await updateProfile({ name: 'New Name' })
+    
+    // Refresh auth state to get updated user data
+    await refreshAuth()
+  }
+  
+  return (
+    <div>
+      <h1>{user?.name}</h1>
+      <button onClick={handleProfileUpdate}>Update Profile</button>
+    </div>
+  )
+}
+```
+
+### With Loading State
+
+```tsx
+import { useAuth } from '@ouim/simple-logto'
+
+function App() {
+  const { user, isLoadingUser, signIn, signOut } = useAuth()
+  
+  return (
+    <div>
+      {isLoadingUser ? (
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500" />
+        </div>
+      ) : user ? (
+        <Dashboard user={user} onSignOut={signOut} />
+      ) : (
+        <LandingPage onSignIn={signIn} />
+      )}
+    </div>
+  )
+}
+```
+
+## Middleware Behavior
+
+### `middleware: 'auth'`
+
+Protects routes that require authentication:
+
+```tsx
+const { user } = useAuth({
+  middleware: 'auth',
+  redirectTo: '/login'
+})
+
+// If user is NOT authenticated → redirects to '/login'
+// If user IS authenticated → renders normally
+```
+
+### `middleware: 'guest'`
+
+Protects routes that should only be accessible to unauthenticated users:
+
+```tsx
+const { user } = useAuth({
+  middleware: 'guest',
+  redirectIfAuthenticated: '/dashboard'
+})
+
+// If user IS authenticated → redirects to '/dashboard'
+// If user is NOT authenticated → renders normally
+```
+
+### No Middleware
+
+```tsx
+const { user } = useAuth()
+
+// No automatic redirects
+// Manually check user state and handle accordingly
+```
+
+## SSR Considerations
+
+<Info>
+The hook waits for client-side mounting and `isLoadingUser` to be `false` before performing middleware redirects, preventing hydration mismatches.
+</Info>
+
+```tsx
+useEffect(() => {
+  if (isLoadingUser) return // Wait for loading to complete
+  
+  // Perform middleware checks and redirects
+}, [user, isLoadingUser, memoizedOptions])
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use middleware for route protection">
+    Instead of manually checking `user` and redirecting, use the built-in `middleware` option for cleaner code.
+  </Accordion>
+  
+  <Accordion title="Always check loading state">
+    Always handle the `isLoadingUser` state to prevent UI flashing and provide better UX.
+  </Accordion>
+  
+  <Accordion title="Memoize options object">
+    The hook internally memoizes options, but you can also wrap your options in `useMemo` if they depend on other state.
+  </Accordion>
+  
+  <Accordion title="Handle sign-out errors">
+    Wrap `signOut` calls in try-catch blocks to handle potential errors gracefully.
+  </Accordion>
+</AccordionGroup>
+
+## TypeScript Support
+
+The hook is fully typed:
+
+```typescript
+import { useAuth, type AuthOptions, type AuthContextType } from '@ouim/simple-logto'
+
+const options: AuthOptions = {
+  middleware: 'auth',
+  redirectTo: '/login'
+}
+
+const auth: AuthContextType = useAuth(options)
+```
+
+## Troubleshooting
+
+<Warning>
+**"useAuthContext must be used within an AuthProvider"**: Ensure your component is wrapped with `AuthProvider`.
+</Warning>
+
+<Warning>
+**Infinite redirect loop**: Check that `redirectTo` and `redirectIfAuthenticated` point to different routes and don't conflict.
+</Warning>
+
+<Check>
+The hook automatically refreshes auth state when:
+- Window regains focus
+- Storage events occur (cross-tab sync)
+- Custom `auth-state-changed` events are dispatched
+</Check>
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="AuthProvider" icon="shield-check" href="/frontend/auth-provider">
+    Configure authentication provider
+  </Card>
+  
+  <Card title="Route Protection" icon="lock" href="/frontend/route-protection">
+    Advanced route protection patterns
+  </Card>
+  
+  <Card title="UserCenter" icon="user" href="/frontend/user-center">
+    Pre-built user menu component
+  </Card>
+  
+  <Card title="CallbackPage" icon="arrow-right-to-bracket" href="/frontend/callback-page">
+    Handle authentication callbacks
+  </Card>
+</CardGroup>

@@ -1,0 +1,86 @@
+---
+title: Introduction
+description: A simpler way to use @logto/react with prebuilt UI components and hooks for fast authentication setup in React apps
+---
+
+# Welcome to Simple Logto
+
+A plug-and-play authentication solution that simplifies [@logto/react](https://github.com/logto-io/logto) with prebuilt UI components and hooks for fast authentication setup in React applications.
+
+Simple Logto is designed to save you the hassle of setting up authentication from scratch and connecting frontend and backend authentication flows. Start quickly with minimal configuration, and migrate to the official Logto SDK later if you need more advanced features.
+
+## Key features
+
+<CardGroup cols={2}>
+  <Card title="Frontend components" icon="react" href="#frontend-features">
+    Prebuilt AuthProvider, UserCenter, CallbackPage, and useAuth hook for seamless React integration
+  </Card>
+  <Card title="Backend authentication" icon="server" href="#backend-features">
+    JWT verification with JWKS caching, Express middleware, and Next.js support
+  </Card>
+  <Card title="Guest mode" icon="user" href="#guest-mode">
+    Built-in guest user support with fingerprinting for anonymous access
+  </Card>
+  <Card title="Bundler configuration" icon="gear" href="#bundler-support">
+    Pre-configured settings for Vite, Webpack, and Next.js
+  </Card>
+</CardGroup>
+
+## Frontend features
+
+- **AuthProvider** - Easy context provider for Logto authentication with custom navigation support
+- **UserCenter** - Prebuilt user dropdown/avatar component for your navbar
+- **CallbackPage** - Handles OAuth callback and popup flows automatically
+- **useAuth** - React hook for accessing user data and auth actions with middleware support
+- **Custom navigation** - Integrates with React Router, Next.js, and other routing libraries
+- **Guest mode** - Built-in guest user support with fingerprinting
+
+## Backend features
+
+- **JWT verification** - Manual JWT verification with JWKS caching
+- **Express.js middleware** - Ready-to-use Express middleware with built-in cookie parsing
+- **Next.js support** - API routes and middleware helpers for Next.js applications
+- **TypeScript support** - Full TypeScript definitions included
+
+## Guest mode
+
+Allow users to browse your app without authentication using the built-in guest mode with fingerprinting:
+
+```tsx src/components/Dashboard.tsx
+import { useAuth } from '@ouim/simple-logto'
+
+function Dashboard() {
+  const { user } = useAuth({
+    middleware: 'guest', // Allow guest users
+  })
+
+  return (
+    <div>
+      {user ? (
+        <p>Welcome back, {user.name}!</p>
+      ) : (
+        <p>You're browsing as a guest</p>
+      )}
+    </div>
+  )
+}
+```
+
+## Bundler support
+
+Pre-configured bundler settings resolve common issues with the `jose` library and other dependencies:
+
+- **Vite** - Pre-configured Vite settings via `viteConfig`
+- **Webpack** - Webpack configuration helpers via `webpackConfig`
+- **Next.js** - Next.js bundler configuration via `nextjsConfig`
+
+## Get started
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Install Simple Logto using npm, yarn, or pnpm
+  </Card>
+  <Card title="Quick start" icon="rocket" href="/quickstart">
+    Get up and running with authentication in minutes
+  </Card>
+</CardGroup>

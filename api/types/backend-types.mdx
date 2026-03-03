@@ -1,0 +1,257 @@
+---
+title: "Backend Types"
+description: "TypeScript type definitions for Simple Logto backend SDK"
+---
+
+Backend TypeScript types used in Simple Logto server-side authentication and middleware.
+
+## Authentication Types
+
+### AuthPayload
+
+JWT payload structure returned after token verification.
+
+<ResponseField name="sub" type="string" required>
+  Subject - the user ID from Logto
+</ResponseField>
+
+<ResponseField name="scope" type="string" required>
+  OAuth scopes granted to the token
+</ResponseField>
+
+<ResponseField name="[key: string]" type="any">
+  Additional claims from the JWT token
+</ResponseField>
+
+```typescript
+export interface AuthPayload {
+  sub: string // user ID
+  scope: string
+  [key: string]: any
+}
+```
+
+### AuthContext
+
+Authentication context attached to requests after verification.
+
+<ResponseField name="userId" type="string | null" required>
+  The authenticated user ID, or `null` if not authenticated
+</ResponseField>
+
+<ResponseField name="isAuthenticated" type="boolean" required>
+  Whether the request has a valid authentication token
+</ResponseField>
+
+<ResponseField name="payload" type="AuthPayload | null" required>
+  The full JWT payload if authenticated, otherwise `null`
+</ResponseField>
+
+<ResponseField name="isGuest" type="boolean">
+  Whether the request is from a guest user (when `allowGuest` is enabled)
+</ResponseField>
+
+<ResponseField name="guestId" type="string">
+  The guest user ID (when in guest mode)
+</ResponseField>
+
+```typescript
+export interface AuthContext {
+  userId: string | null
+  isAuthenticated: boolean
+  payload: AuthPayload | null
+  isGuest?: boolean
+  guestId?: string
+}
+```
+
+### VerifyAuthOptions
+
+Configuration options for token verification.
+
+<ResponseField name="logtoUrl" type="string" required>
+  The Logto tenant URL (e.g., `https://your-tenant.logto.app`)
+</ResponseField>
+
+<ResponseField name="audience" type="string" required>
+  The API resource identifier configured in Logto
+</ResponseField>
+
+<ResponseField name="cookieName" type="string" default="logto_authtoken">
+  Name of the cookie containing the JWT token
+</ResponseField>
+
+<ResponseField name="requiredScope" type="string">
+  Required OAuth scope for authorization (e.g., `"read:users"`)
+</ResponseField>
+
+<ResponseField name="allowGuest" type="boolean" default={false}>
+  Allow unauthenticated guest users with guest IDs
+</ResponseField>
+
+```typescript
+export interface VerifyAuthOptions {
+  logtoUrl: string
+  audience: string
+  cookieName?: string
+  requiredScope?: string
+  allowGuest?: boolean
+}
+```
+
+## Express Types
+
+### ExpressRequest
+
+Extended Express request interface with authentication context.
+
+<ResponseField name="cookies" type="{ [key: string]: string }">
+  Parsed cookies from the request
+</ResponseField>
+
+<ResponseField name="headers" type="{ [key: string]: string | string[] | undefined }" required>
+  HTTP headers from the request
+</ResponseField>
+
+<ResponseField name="auth" type="AuthContext">
+  Authentication context added by the middleware
+</ResponseField>
+
+```typescript
+export interface ExpressRequest {
+  cookies?: { [key: string]: string }
+  headers: { [key: string]: string | string[] | undefined }
+  auth?: AuthContext
+}
+```
+
+### ExpressResponse
+
+Express response interface for middleware.
+
+<ResponseField name="status" type="(code: number) => ExpressResponse" required>
+  Set HTTP status code
+</ResponseField>
+
+<ResponseField name="json" type="(obj: any) => ExpressResponse" required>
+  Send JSON response
+</ResponseField>
+
+```typescript
+export interface ExpressResponse {
+  status: (code: number) => ExpressResponse
+  json: (obj: any) => ExpressResponse
+}
+```
+
+### ExpressNext
+
+Express next function type.
+
+```typescript
+export type ExpressNext = (err?: any) => void
+```
+
+## Next.js Types
+
+### NextRequest
+
+Next.js request interface for route handlers and middleware.
+
+<ResponseField name="cookies" type="{ get: (name: string) => { value: string } | undefined }" required>
+  Cookie accessor for Next.js requests
+</ResponseField>
+
+<ResponseField name="headers" type="{ get: (name: string) => string | null }" required>
+  Header accessor for Next.js requests
+</ResponseField>
+
+```typescript
+export interface NextRequest {
+  cookies: {
+    get: (name: string) => { value: string } | undefined
+  }
+  headers: {
+    get: (name: string) => string | null
+  }
+}
+```
+
+### NextResponse
+
+Next.js response interface for route handlers.
+
+<ResponseField name="json" type="(body: any, init?: { status?: number }) => NextResponse" required>
+  Send JSON response with optional status code
+</ResponseField>
+
+```typescript
+export interface NextResponse {
+  json: (body: any, init?: { status?: number }) => NextResponse
+}
+```
+
+## Usage Examples
+
+### Express Middleware
+
+```typescript
+import type { ExpressRequest, ExpressResponse, ExpressNext } from 'simple-logto/backend'
+import { verifyAuth } from 'simple-logto/backend'
+
+const authMiddleware = verifyAuth({
+  logtoUrl: 'https://your-tenant.logto.app',
+  audience: 'https://api.example.com',
+  requiredScope: 'read:users'
+})
+
+app.get('/api/protected', authMiddleware, (req: ExpressRequest, res: ExpressResponse) => {
+  const userId = req.auth?.userId
+  res.json({ userId, message: 'Protected data' })
+})
+```
+
+### Next.js Route Handler
+
+```typescript
+import type { NextRequest } from 'simple-logto/backend'
+import { verifyAuthNextJs } from 'simple-logto/backend'
+import { NextResponse } from 'next/server'
+
+export async function GET(request: NextRequest) {
+  const authContext = await verifyAuthNextJs(request, {
+    logtoUrl: process.env.LOGTO_URL!,
+    audience: process.env.LOGTO_AUDIENCE!,
+  })
+  
+  if (!authContext.isAuthenticated) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  
+  return NextResponse.json({ userId: authContext.userId })
+}
+```
+
+### Guest Mode
+
+```typescript
+import { verifyAuth } from 'simple-logto/backend'
+
+const guestMiddleware = verifyAuth({
+  logtoUrl: 'https://your-tenant.logto.app',
+  audience: 'https://api.example.com',
+  allowGuest: true
+})
+
+app.get('/api/content', guestMiddleware, (req, res) => {
+  if (req.auth?.isGuest) {
+    // Handle guest user
+    console.log('Guest ID:', req.auth.guestId)
+  } else {
+    // Handle authenticated user
+    console.log('User ID:', req.auth?.userId)
+  }
+  
+  res.json({ message: 'Content accessible to all' })
+})
+```

@@ -1,0 +1,181 @@
+---
+title: "Bundler Configuration"
+description: "Configure Vite, Webpack, or Next.js to work with Simple Logto"
+---
+
+Simple Logto provides pre-configured bundler settings to resolve common issues with the `jose` library and optimize dependencies.
+
+## Why Bundler Configuration?
+
+The underlying Logto SDK uses the `jose` library for JWT handling, which can cause bundling issues in some environments. Simple Logto provides ready-to-use configurations that:
+
+- Resolve `jose` library compatibility issues
+- Optimize dependency bundling
+- Ensure proper module resolution
+
+## Vite Configuration
+
+<Warning>
+When editing a Vite config or other build-time script, import directly from the `bundler-config` subpath. This avoids executing the main library bundle (which pulls in React and may cause issues during Node startup).
+</Warning>
+
+```javascript vite.config.js
+import { viteConfig } from '@ouim/simple-logto/bundler-config'
+
+export default {
+  ...viteConfig,
+  // your other config
+}
+```
+
+### What's Included
+
+The Vite configuration provides:
+
+```javascript
+{
+  optimizeDeps: {
+    include: ['@logto/react', '@ouim/better-logto-react'],
+  },
+  resolve: {
+    alias: {
+      jose: 'jose/dist/node/cjs',
+    },
+  },
+}
+```
+
+## Webpack Configuration
+
+```javascript webpack.config.js
+import { webpackConfig } from '@ouim/simple-logto'
+
+module.exports = {
+  ...webpackConfig,
+  // your other config
+}
+```
+
+### What's Included
+
+The Webpack configuration provides:
+
+```javascript
+{
+  resolve: {
+    alias: {
+      jose: 'jose/dist/node/cjs',
+    },
+  },
+}
+```
+
+## Next.js Configuration
+
+```javascript next.config.js
+import { nextjsConfig } from '@ouim/simple-logto'
+
+module.exports = {
+  ...nextjsConfig,
+  // your other config
+}
+```
+
+### What's Included
+
+The Next.js configuration provides the same alias configuration as Webpack:
+
+```javascript
+{
+  resolve: {
+    alias: {
+      jose: 'jose/dist/node/cjs',
+    },
+  },
+}
+```
+
+## Custom Configuration
+
+If you need more control or want to integrate the configuration differently, you can use the `getBundlerConfig` helper:
+
+```javascript
+import { getBundlerConfig } from '@ouim/simple-logto/bundler-config'
+
+// Get configuration for specific bundler
+const viteConfig = getBundlerConfig('vite')
+const webpackConfig = getBundlerConfig('webpack')
+const nextConfig = getBundlerConfig('nextjs')
+```
+
+### Parameters
+
+The `getBundlerConfig` function accepts one parameter:
+
+<ParamField path="bundler" type="'vite' | 'webpack' | 'nextjs'" default="'vite'">
+  The bundler type to get configuration for
+</ParamField>
+
+### Merging with Existing Config
+
+You can merge the provided configuration with your existing setup:
+
+```javascript vite.config.js
+import { getBundlerConfig } from '@ouim/simple-logto/bundler-config'
+import { defineConfig } from 'vite'
+
+const logtoConfig = getBundlerConfig('vite')
+
+export default defineConfig({
+  // Merge optimize deps
+  optimizeDeps: {
+    ...logtoConfig.optimizeDeps,
+    include: [
+      ...logtoConfig.optimizeDeps.include,
+      'your-other-deps',
+    ],
+  },
+  // Merge resolve aliases
+  resolve: {
+    ...logtoConfig.resolve,
+    alias: {
+      ...logtoConfig.resolve.alias,
+      '@': '/src',
+    },
+  },
+  // Your other config
+  plugins: [...],
+})
+```
+
+<Tip>
+The bundler configuration is minimal and designed to be easily merged with your existing setup. It only modifies what's necessary for Simple Logto to work properly.
+</Tip>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Module not found: jose">
+    Make sure you've applied the bundler configuration. The `jose` alias resolves to the CommonJS distribution which is more compatible with bundlers.
+  </Accordion>
+  
+  <Accordion title="React errors during build">
+    If you're importing from the main package in your build config, switch to importing from `@ouim/simple-logto/bundler-config` instead. This avoids loading React during the build process.
+  </Accordion>
+  
+  <Accordion title="Vite optimization errors">
+    If you see errors about pre-bundling dependencies, make sure the `optimizeDeps.include` array includes both `@logto/react` and `@ouim/better-logto-react`.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Guest Mode" icon="user" href="/configuration/guest-mode">
+    Learn how to enable guest mode for unauthenticated users
+  </Card>
+  
+  <Card title="Custom Navigation" icon="route" href="/configuration/custom-navigation">
+    Set up custom navigation with your router
+  </Card>
+</CardGroup>

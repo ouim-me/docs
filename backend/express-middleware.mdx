@@ -1,0 +1,359 @@
+---
+title: 'Express Middleware'
+description: 'Protect Express.js routes with Logto authentication'
+icon: 'node-js'
+---
+
+## Quick Start
+
+The `createExpressAuthMiddleware` function creates an Express middleware that automatically verifies Logto tokens and attaches user information to the request object.
+
+```javascript
+import express from 'express';
+import { createExpressAuthMiddleware } from 'simple-logto/backend';
+
+const app = express();
+
+const authMiddleware = createExpressAuthMiddleware({
+  logtoUrl: 'https://your-tenant.logto.app',
+  audience: 'https://api.yourapp.com',
+});
+
+// Protected route
+app.get('/api/user/profile', authMiddleware, (req, res) => {
+  // Access authenticated user info
+  const { userId, payload } = req.auth;
+  
+  res.json({
+    userId,
+    email: payload.email,
+    name: payload.name,
+  });
+});
+
+app.listen(3000);
+```
+
+## Configuration
+
+The middleware accepts a `VerifyAuthOptions` object:
+
+<ParamField path="logtoUrl" type="string" required>
+  Your Logto server URL
+  
+  ```typescript
+  logtoUrl: 'https://your-tenant.logto.app'
+  ```
+</ParamField>
+
+<ParamField path="audience" type="string" required>
+  The API resource identifier you registered in Logto
+  
+  ```typescript
+  audience: 'https://api.yourapp.com'
+  ```
+</ParamField>
+
+<ParamField path="cookieName" type="string" default="logto_authtoken">
+  Custom cookie name if you changed it in the frontend
+  
+  ```typescript
+  cookieName: 'my_custom_token'
+  ```
+</ParamField>
+
+<ParamField path="requiredScope" type="string">
+  Require a specific scope to be present in the token
+  
+  ```typescript
+  requiredScope: 'read:admin'
+  ```
+</ParamField>
+
+<ParamField path="allowGuest" type="boolean" default="false">
+  Allow unauthenticated users with guest context
+  
+  ```typescript
+  allowGuest: true
+  ```
+</ParamField>
+
+## Request Object
+
+The middleware adds an `auth` property to the Express request:
+
+```typescript
+interface ExpressRequest {
+  auth?: AuthContext;
+  // ... other Express request properties
+}
+
+interface AuthContext {
+  userId: string | null;          // Logto user ID
+  isAuthenticated: boolean;       // true if authenticated
+  payload: AuthPayload | null;    // Full JWT claims
+  isGuest?: boolean;             // true in guest mode
+  guestId?: string;              // UUID for guest users
+}
+```
+
+## Usage Examples
+
+### Basic Protected Route
+
+```javascript
+import { createExpressAuthMiddleware } from 'simple-logto/backend';
+
+const auth = createExpressAuthMiddleware({
+  logtoUrl: process.env.LOGTO_URL,
+  audience: process.env.LOGTO_API_RESOURCE,
+});
+
+app.get('/api/protected', auth, (req, res) => {
+  res.json({ 
+    message: 'This is protected!',
+    userId: req.auth.userId 
+  });
+});
+```
+
+### Route with Required Scope
+
+```javascript
+const adminAuth = createExpressAuthMiddleware({
+  logtoUrl: process.env.LOGTO_URL,
+  audience: process.env.LOGTO_API_RESOURCE,
+  requiredScope: 'admin:write',
+});
+
+app.delete('/api/admin/users/:id', adminAuth, (req, res) => {
+  // Only users with 'admin:write' scope can access
+  res.json({ success: true });
+});
+```
+
+### Multiple Middleware
+
+Use different authentication requirements for different routes:
+
+```javascript
+const basicAuth = createExpressAuthMiddleware({
+  logtoUrl: process.env.LOGTO_URL,
+  audience: process.env.LOGTO_API_RESOURCE,
+});
+
+const adminAuth = createExpressAuthMiddleware({
+  logtoUrl: process.env.LOGTO_URL,
+  audience: process.env.LOGTO_API_RESOURCE,
+  requiredScope: 'admin',
+});
+
+// Regular authenticated routes
+app.use('/api/user', basicAuth);
+app.get('/api/user/profile', (req, res) => { /* ... */ });
+app.put('/api/user/settings', (req, res) => { /* ... */ });
+
+// Admin-only routes
+app.use('/api/admin', adminAuth);
+app.get('/api/admin/users', (req, res) => { /* ... */ });
+app.post('/api/admin/settings', (req, res) => { /* ... */ });
+```
+
+### Guest Mode
+
+Allow both authenticated and guest users:
+
+```javascript
+const flexibleAuth = createExpressAuthMiddleware({
+  logtoUrl: process.env.LOGTO_URL,
+  audience: process.env.LOGTO_API_RESOURCE,
+  allowGuest: true,
+});
+
+app.get('/api/cart', flexibleAuth, (req, res) => {
+  if (req.auth.isAuthenticated) {
+    // Load user's saved cart from database
+    const cart = await getCartByUserId(req.auth.userId);
+    res.json(cart);
+  } else {
+    // Load guest cart from session
+    const cart = await getCartByGuestId(req.auth.guestId);
+    res.json(cart);
+  }
+});
+```
+
+### TypeScript Usage
+
+```typescript
+import express, { Request, Response } from 'express';
+import { createExpressAuthMiddleware, AuthContext } from 'simple-logto/backend';
+
+// Extend Express Request type
+declare global {
+  namespace Express {
+    interface Request {
+      auth?: AuthContext;
+    }
+  }
+}
+
+const app = express();
+
+const authMiddleware = createExpressAuthMiddleware({
+  logtoUrl: process.env.LOGTO_URL!,
+  audience: process.env.LOGTO_API_RESOURCE!,
+});
+
+app.get('/api/profile', authMiddleware, (req: Request, res: Response) => {
+  // TypeScript knows about req.auth
+  const userId = req.auth!.userId;
+  res.json({ userId });
+});
+```
+
+## Error Responses
+
+The middleware returns `401 Unauthorized` for authentication failures:
+
+### Missing Token
+
+```json
+{
+  "error": "Authentication required",
+  "message": "No token found in cookies or Authorization header"
+}
+```
+
+### Invalid Token
+
+```json
+{
+  "error": "Authentication failed",
+  "message": "Token verification failed: Token has expired"
+}
+```
+
+### Missing Scope
+
+```json
+{
+  "error": "Authentication failed",
+  "message": "Token verification failed: Missing required scope: admin:write"
+}
+```
+
+<Note>
+When `allowGuest: true`, the middleware never returns 401 errors. Instead, it sets `req.auth` with guest context.
+</Note>
+
+## How It Works
+
+The middleware performs these steps on each request:
+
+<Steps>
+  <Step title="Parse Cookies">
+    Automatically parses cookies using `cookie-parser` if not already available
+  </Step>
+  
+  <Step title="Extract Token">
+    Checks for token in cookies (`logto_authtoken`) then Authorization header
+  </Step>
+  
+  <Step title="Verify Token">
+    - Fetches JWKS from Logto server (cached for 5 minutes)
+    - Verifies JWT signature using the appropriate public key
+    - Validates issuer, audience, expiration, and scopes
+  </Step>
+  
+  <Step title="Set Auth Context">
+    Attaches `AuthContext` to `req.auth` and calls `next()`
+  </Step>
+  
+  <Step title="Handle Errors">
+    Returns 401 JSON response or guest context (if `allowGuest` enabled)
+  </Step>
+</Steps>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Environment Variables">
+    Store configuration in environment variables:
+    
+    ```javascript
+    const auth = createExpressAuthMiddleware({
+      logtoUrl: process.env.LOGTO_URL,
+      audience: process.env.LOGTO_API_RESOURCE,
+    });
+    ```
+  </Accordion>
+  
+  <Accordion title="Route-Level Authorization">
+    Use different middleware instances for different authorization levels:
+    
+    ```javascript
+    const userAuth = createExpressAuthMiddleware({ ... });
+    const adminAuth = createExpressAuthMiddleware({ 
+      ..., 
+      requiredScope: 'admin' 
+    });
+    ```
+  </Accordion>
+  
+  <Accordion title="Check Authentication Status">
+    Always check `isAuthenticated` when using `allowGuest`:
+    
+    ```javascript
+    app.post('/api/checkout', flexibleAuth, (req, res) => {
+      if (!req.auth.isAuthenticated) {
+        return res.status(401).json({ 
+          error: 'Please login to checkout' 
+        });
+      }
+      // Process checkout
+    });
+    ```
+  </Accordion>
+  
+  <Accordion title="Access JWT Payload">
+    The full JWT payload is available in `req.auth.payload`:
+    
+    ```javascript
+    app.get('/api/user', auth, (req, res) => {
+      const { email, name, picture } = req.auth.payload;
+      res.json({ email, name, picture });
+    });
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Cookie Parsing
+
+The middleware automatically handles cookie parsing:
+
+- If `req.cookies` exists (already parsed), uses it directly
+- If not, applies `cookie-parser` middleware internally
+- No need to add `cookie-parser` to your app separately
+
+```javascript
+// This works even without app.use(cookieParser())
+app.get('/api/protected', authMiddleware, (req, res) => {
+  res.json({ userId: req.auth.userId });
+});
+```
+
+<Tip>
+While the middleware handles cookie parsing internally, you can still use `cookie-parser` globally if needed for other routes.
+</Tip>
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Next.js Integration" icon="react" href="/backend/nextjs-integration">
+    Server-side auth for Next.js
+  </Card>
+  <Card title="Generic Usage" icon="code" href="/backend/generic-usage">
+    Use in any Node.js environment
+  </Card>
+</CardGroup>

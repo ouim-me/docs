@@ -1,0 +1,518 @@
+---
+title: 'Route Protection'
+description: 'Patterns and best practices for protecting routes and pages'
+icon: 'shield-halved'
+---
+
+## Overview
+
+Route protection ensures that certain pages are only accessible to authenticated users, while others are restricted to guests. Simple Logto provides multiple patterns for implementing route protection.
+
+## Protection Methods
+
+There are three main approaches to route protection:
+
+1. **Middleware option in `useAuth` hook** (recommended)
+2. **Manual checks with conditional rendering**
+3. **Higher-order components (HOC)**
+
+## Method 1: Middleware Option (Recommended)
+
+The simplest and most declarative approach using the `useAuth` hook's built-in middleware.
+
+### Protected Route (Auth Required)
+
+```tsx app/dashboard/page.tsx
+import { useAuth } from '@ouim/simple-logto'
+
+export default function DashboardPage() {
+  const { user } = useAuth({
+    middleware: 'auth',
+    redirectTo: '/login'
+  })
+  
+  // This will only render if user is authenticated
+  // Otherwise, automatically redirects to '/login'
+  return (
+    <div>
+      <h1>Dashboard</h1>
+      <p>Welcome, {user?.name}!</p>
+    </div>
+  )
+}
+```
+
+### Guest-Only Route
+
+```tsx app/login/page.tsx
+import { useAuth } from '@ouim/simple-logto'
+
+export default function LoginPage() {
+  const { signIn } = useAuth({
+    middleware: 'guest',
+    redirectIfAuthenticated: '/dashboard'
+  })
+  
+  // This will only render if user is NOT authenticated
+  // Otherwise, automatically redirects to '/dashboard'
+  return (
+    <div>
+      <h1>Sign In</h1>
+      <button onClick={() => signIn()}>Sign In</button>
+    </div>
+  )
+}
+```
+
+## Method 2: Manual Checks
+
+For more control over the protection logic and UI.
+
+### With Loading and Redirect
+
+```tsx
+import { useAuth } from '@ouim/simple-logto'
+import { useRouter } from 'next/navigation'
+import { useEffect } from 'react'
+
+export default function ProtectedPage() {
+  const { user, isLoadingUser } = useAuth()
+  const router = useRouter()
+  
+  useEffect(() => {
+    if (!isLoadingUser && !user) {
+      router.push('/login')
+    }
+  }, [user, isLoadingUser, router])
+  
+  if (isLoadingUser) {
+    return <div>Loading...</div>
+  }
+  
+  if (!user) {
+    return null // or return <div>Redirecting...</div>
+  }
+  
+  return (
+    <div>
+      <h1>Protected Content</h1>
+      <p>Only authenticated users see this</p>
+    </div>
+  )
+}
+```
+
+### With Error Message
+
+```tsx
+import { useAuth } from '@ouim/simple-logto'
+
+export default function ProtectedPage() {
+  const { user, isLoadingUser, signIn } = useAuth()
+  
+  if (isLoadingUser) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500" />
+      </div>
+    )
+  }
+  
+  if (!user) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen gap-4">
+        <h1 className="text-2xl font-bold">Authentication Required</h1>
+        <p className="text-gray-600">Please sign in to access this page</p>
+        <button
+          onClick={() => signIn()}
+          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+        >
+          Sign In
+        </button>
+      </div>
+    )
+  }
+  
+  return (
+    <div>
+      <h1>Protected Content</h1>
+    </div>
+  )
+}
+```
+
+## Method 3: Higher-Order Component
+
+Create reusable protection wrappers.
+
+### Protected Page HOC
+
+```tsx lib/withAuth.tsx
+import { useAuth } from '@ouim/simple-logto'
+import { useRouter } from 'next/navigation'
+import { useEffect, ComponentType } from 'react'
+
+export function withAuth<P extends object>(
+  Component: ComponentType<P>,
+  redirectTo: string = '/login'
+) {
+  return function ProtectedComponent(props: P) {
+    const { user, isLoadingUser } = useAuth()
+    const router = useRouter()
+    
+    useEffect(() => {
+      if (!isLoadingUser && !user) {
+        router.push(redirectTo)
+      }
+    }, [user, isLoadingUser, router])
+    
+    if (isLoadingUser) {
+      return (
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500" />
+        </div>
+      )
+    }
+    
+    if (!user) {
+      return null
+    }
+    
+    return <Component {...props} />
+  }
+}
+
+// Usage
+import { withAuth } from '@/lib/withAuth'
+
+function DashboardPage() {
+  return <div>Dashboard Content</div>
+}
+
+export default withAuth(DashboardPage)
+```
+
+### Guest-Only HOC
+
+```tsx lib/withGuest.tsx
+import { useAuth } from '@ouim/simple-logto'
+import { useRouter } from 'next/navigation'
+import { useEffect, ComponentType } from 'react'
+
+export function withGuest<P extends object>(
+  Component: ComponentType<P>,
+  redirectTo: string = '/dashboard'
+) {
+  return function GuestComponent(props: P) {
+    const { user, isLoadingUser } = useAuth()
+    const router = useRouter()
+    
+    useEffect(() => {
+      if (!isLoadingUser && user) {
+        router.push(redirectTo)
+      }
+    }, [user, isLoadingUser, router])
+    
+    if (isLoadingUser) {
+      return (
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500" />
+        </div>
+      )
+    }
+    
+    if (user) {
+      return null
+    }
+    
+    return <Component {...props} />
+  }
+}
+
+// Usage
+import { withGuest } from '@/lib/withGuest'
+
+function LoginPage() {
+  return <div>Login Content</div>
+}
+
+export default withGuest(LoginPage)
+```
+
+## Advanced Patterns
+
+### Role-Based Protection
+
+```tsx
+import { useAuth } from '@ouim/simple-logto'
+import { useRouter } from 'next/navigation'
+import { useEffect } from 'react'
+
+export default function AdminPage() {
+  const { user, isLoadingUser } = useAuth({
+    middleware: 'auth',
+    redirectTo: '/login'
+  })
+  const router = useRouter()
+  
+  useEffect(() => {
+    if (!isLoadingUser && user && user.role !== 'admin') {
+      router.push('/unauthorized')
+    }
+  }, [user, isLoadingUser, router])
+  
+  if (isLoadingUser) {
+    return <div>Loading...</div>
+  }
+  
+  if (!user || user.role !== 'admin') {
+    return null
+  }
+  
+  return (
+    <div>
+      <h1>Admin Dashboard</h1>
+      <p>Admin-only content</p>
+    </div>
+  )
+}
+```
+
+### Permission-Based Protection
+
+```tsx
+import { useAuth } from '@ouim/simple-logto'
+
+function hasPermission(user: any, permission: string): boolean {
+  return user?.permissions?.includes(permission) ?? false
+}
+
+export default function SettingsPage() {
+  const { user, isLoadingUser } = useAuth({
+    middleware: 'auth',
+    redirectTo: '/login'
+  })
+  
+  if (isLoadingUser) {
+    return <div>Loading...</div>
+  }
+  
+  const canEditSettings = hasPermission(user, 'settings:write')
+  const canViewSettings = hasPermission(user, 'settings:read')
+  
+  if (!canViewSettings) {
+    return (
+      <div>
+        <h1>Access Denied</h1>
+        <p>You don't have permission to view settings</p>
+      </div>
+    )
+  }
+  
+  return (
+    <div>
+      <h1>Settings</h1>
+      {canEditSettings ? (
+        <button>Edit Settings</button>
+      ) : (
+        <p>Read-only view</p>
+      )}
+    </div>
+  )
+}
+```
+
+### Conditional Component Rendering
+
+```tsx
+import { useAuth } from '@ouim/simple-logto'
+
+function ProtectedSection({ children }: { children: React.ReactNode }) {
+  const { user, isLoadingUser } = useAuth()
+  
+  if (isLoadingUser) {
+    return <div>Loading...</div>
+  }
+  
+  if (!user) {
+    return null // Don't render anything
+  }
+  
+  return <>{children}</>
+}
+
+// Usage
+export default function Page() {
+  return (
+    <div>
+      <h1>Public Content</h1>
+      <p>Everyone can see this</p>
+      
+      <ProtectedSection>
+        <h2>Members Only</h2>
+        <p>Only authenticated users see this section</p>
+      </ProtectedSection>
+    </div>
+  )
+}
+```
+
+### Layout-Level Protection
+
+```tsx app/dashboard/layout.tsx
+'use client'
+
+import { useAuth } from '@ouim/simple-logto'
+
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  const { user, isLoadingUser } = useAuth({
+    middleware: 'auth',
+    redirectTo: '/login'
+  })
+  
+  if (isLoadingUser) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500" />
+      </div>
+    )
+  }
+  
+  return (
+    <div className="flex">
+      <aside className="w-64 bg-gray-100">
+        <nav>
+          <a href="/dashboard">Dashboard</a>
+          <a href="/dashboard/profile">Profile</a>
+          <a href="/dashboard/settings">Settings</a>
+        </nav>
+      </aside>
+      <main className="flex-1">
+        {children}
+      </main>
+    </div>
+  )
+}
+```
+
+## Navigation Options
+
+Control how redirects behave:
+
+```tsx
+import { useAuth } from '@ouim/simple-logto'
+
+export default function Page() {
+  const { user } = useAuth({
+    middleware: 'auth',
+    redirectTo: '/login',
+    navigationOptions: {
+      replace: true, // Replace history instead of push
+      force: true    // Force navigation even if on same page
+    }
+  })
+  
+  return <div>Protected content</div>
+}
+```
+
+## Server-Side Protection (Next.js)
+
+For server components and API routes:
+
+```tsx app/api/protected/route.ts
+import { cookies } from 'next/headers'
+import { NextResponse } from 'next/server'
+
+export async function GET() {
+  const cookieStore = cookies()
+  const token = cookieStore.get('logto_access_token')
+  
+  if (!token) {
+    return NextResponse.json(
+      { error: 'Unauthorized' },
+      { status: 401 }
+    )
+  }
+  
+  // Verify token and proceed
+  return NextResponse.json({ data: 'Protected data' })
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use middleware option for simple cases">
+    The `middleware` option in `useAuth` is the simplest and most declarative way to protect routes.
+  </Accordion>
+  
+  <Accordion title="Always handle loading state">
+    Show a loading indicator while `isLoadingUser` is `true` to prevent UI flashing.
+  </Accordion>
+  
+  <Accordion title="Protect at the layout level when possible">
+    For sections with multiple protected pages, protect the layout instead of each page individually.
+  </Accordion>
+  
+  <Accordion title="Provide clear feedback">
+    When access is denied, show a clear message and provide a way to authenticate.
+  </Accordion>
+  
+  <Accordion title="Use HOCs for consistent behavior">
+    Create reusable HOCs to ensure consistent protection logic across your app.
+  </Accordion>
+  
+  <Accordion title="Combine client and server protection">
+    For sensitive data, protect both the UI (client) and API routes (server).
+  </Accordion>
+</AccordionGroup>
+
+## Common Patterns Summary
+
+| Pattern | Use Case | Complexity |
+|---------|----------|------------|
+| `middleware: 'auth'` | Require authentication | Low |
+| `middleware: 'guest'` | Guest-only pages | Low |
+| Manual checks | Custom logic needed | Medium |
+| HOC | Reusable protection | Medium |
+| Role-based | Multiple user types | High |
+| Permission-based | Fine-grained access | High |
+
+## Troubleshooting
+
+<Warning>
+**Infinite redirect loop**: Ensure `redirectTo` and `redirectIfAuthenticated` point to pages with different middleware settings.
+</Warning>
+
+<Warning>
+**Flash of unauthenticated content**: Always check `isLoadingUser` before rendering protected content.
+</Warning>
+
+<Check>
+The `useAuth` hook waits for loading to complete before performing middleware redirects, preventing race conditions.
+</Check>
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="useAuth Hook" icon="code" href="/frontend/use-auth">
+    Complete hook documentation
+  </Card>
+  
+  <Card title="AuthProvider" icon="shield-check" href="/frontend/auth-provider">
+    Configure authentication provider
+  </Card>
+  
+  <Card title="UserCenter" icon="user" href="/frontend/user-center">
+    Pre-built user menu component
+  </Card>
+  
+  <Card title="CallbackPage" icon="arrow-right-to-bracket" href="/frontend/callback-page">
+    Handle authentication callbacks
+  </Card>
+</CardGroup>

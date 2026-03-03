@@ -1,0 +1,351 @@
+---
+title: "Custom Navigation"
+description: "Integrate Simple Logto with React Router, Next.js, or other routing libraries"
+---
+
+Simple Logto supports custom navigation to integrate seamlessly with your routing library, preventing full page reloads during authentication flows.
+
+## Why Custom Navigation?
+
+By default, Logto uses `window.location.href` for navigation, which causes full page reloads. Custom navigation allows you to:
+
+- Use client-side routing (React Router, Next.js, etc.)
+- Maintain application state during auth flows
+- Provide a smoother user experience
+- Control navigation behavior in SPAs
+
+## Basic Setup
+
+Pass a `customNavigate` function to the `AuthProvider`:
+
+```tsx
+import { AuthProvider } from '@ouim/simple-logto'
+
+const config = {
+  endpoint: 'https://your-logto-endpoint.com',
+  appId: 'your-app-id',
+}
+
+function App() {
+  const customNavigate = (url, options) => {
+    // Your navigation logic here
+    console.log('Navigating to:', url, options)
+  }
+
+  return (
+    <AuthProvider
+      config={config}
+      callbackUrl="http://localhost:3000/callback"
+      customNavigate={customNavigate}
+    >
+      <YourApp />
+    </AuthProvider>
+  )
+}
+```
+
+## React Router Integration
+
+### React Router v6
+
+```tsx
+import { AuthProvider } from '@ouim/simple-logto'
+import { BrowserRouter, useNavigate } from 'react-router-dom'
+
+function AppProviders({ children }) {
+  const navigate = useNavigate()
+
+  const customNavigate = (url, options) => {
+    // Handle both relative and absolute URLs
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      // External URL - use window.location
+      window.location.href = url
+    } else {
+      // Internal URL - use React Router
+      navigate(url, { replace: options?.replace })
+    }
+  }
+
+  return (
+    <AuthProvider
+      config={logtoConfig}
+      callbackUrl="/callback"
+      customNavigate={customNavigate}
+    >
+      {children}
+    </AuthProvider>
+  )
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <AppProviders>
+        <YourApp />
+      </AppProviders>
+    </BrowserRouter>
+  )
+}
+```
+
+### React Router v5
+
+```tsx
+import { AuthProvider } from '@ouim/simple-logto'
+import { BrowserRouter, useHistory } from 'react-router-dom'
+
+function AppProviders({ children }) {
+  const history = useHistory()
+
+  const customNavigate = (url, options) => {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      window.location.href = url
+    } else {
+      if (options?.replace) {
+        history.replace(url)
+      } else {
+        history.push(url)
+      }
+    }
+  }
+
+  return (
+    <AuthProvider
+      config={logtoConfig}
+      callbackUrl="/callback"
+      customNavigate={customNavigate}
+    >
+      {children}
+    </AuthProvider>
+  )
+}
+```
+
+## Next.js Integration
+
+### App Router (Next.js 13+)
+
+```tsx
+'use client'
+
+import { AuthProvider } from '@ouim/simple-logto'
+import { useRouter } from 'next/navigation'
+
+function Providers({ children }) {
+  const router = useRouter()
+
+  const customNavigate = (url, options) => {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      window.location.href = url
+    } else {
+      if (options?.replace) {
+        router.replace(url)
+      } else {
+        router.push(url)
+      }
+    }
+  }
+
+  return (
+    <AuthProvider
+      config={logtoConfig}
+      callbackUrl="/callback"
+      customNavigate={customNavigate}
+    >
+      {children}
+    </AuthProvider>
+  )
+}
+```
+
+### Pages Router (Next.js 12 and earlier)
+
+```tsx
+import { AuthProvider } from '@ouim/simple-logto'
+import { useRouter } from 'next/router'
+
+function MyApp({ Component, pageProps }) {
+  const router = useRouter()
+
+  const customNavigate = (url, options) => {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      window.location.href = url
+    } else {
+      if (options?.replace) {
+        router.replace(url)
+      } else {
+        router.push(url)
+      }
+    }
+  }
+
+  return (
+    <AuthProvider
+      config={logtoConfig}
+      callbackUrl="/callback"
+      customNavigate={customNavigate}
+    >
+      <Component {...pageProps} />
+    </AuthProvider>
+  )
+}
+```
+
+## Navigation Options
+
+The `customNavigate` function receives two parameters:
+
+<ParamField path="url" type="string" required>
+  The URL to navigate to (can be relative or absolute)
+</ParamField>
+
+<ParamField path="options" type="NavigationOptions">
+  Navigation options object:
+  
+  <Expandable title="properties">
+    <ParamField path="replace" type="boolean" default="false">
+      Whether to replace the current history entry instead of pushing a new one
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## How It Works
+
+<Steps>
+  <Step title="Provider Registration">
+    When you pass `customNavigate` to `AuthProvider`, it registers your navigation function globally for the library.
+  </Step>
+  
+  <Step title="Internal Navigation Calls">
+    When Simple Logto needs to navigate (e.g., after sign-in, during callback), it uses your custom function instead of `window.location.href`.
+  </Step>
+  
+  <Step title="Cleanup on Unmount">
+    When the `AuthProvider` unmounts, it automatically unregisters the custom navigation function.
+  </Step>
+</Steps>
+
+## Implementation Details
+
+The custom navigation is set using the `setCustomNavigate` utility from the library:
+
+```typescript
+// From context.tsx (line 360-365)
+useEffect(() => {
+  setCustomNavigate(customNavigate || null)
+
+  // Cleanup on unmount
+  return () => setCustomNavigate(null)
+}, [customNavigate])
+```
+
+This ensures that:
+- The navigation function is available throughout the library
+- It's properly cleaned up when the component unmounts
+- You can dynamically change the navigation function if needed
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Handle External URLs">
+    Always check if the URL is external (starts with `http://` or `https://`) and use `window.location.href` for those cases. Authentication flows may redirect to external Logto servers.
+    
+    ```tsx
+    const customNavigate = (url, options) => {
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        window.location.href = url
+      } else {
+        // Use your router
+      }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Support Replace Option">
+    Respect the `options.replace` parameter to allow the library to replace history entries when appropriate.
+    
+    ```tsx
+    const customNavigate = (url, options) => {
+      if (options?.replace) {
+        router.replace(url)
+      } else {
+        router.push(url)
+      }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Use Stable Functions">
+    Make sure your `customNavigate` function is stable (use `useCallback` if needed) to prevent unnecessary re-renders.
+    
+    ```tsx
+    const customNavigate = useCallback((url, options) => {
+      // navigation logic
+    }, [router])
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Popup Sign-In
+
+Custom navigation works seamlessly with popup sign-in mode:
+
+```tsx
+import { AuthProvider } from '@ouim/simple-logto'
+import { useNavigate } from 'react-router-dom'
+
+function AppProviders({ children }) {
+  const navigate = useNavigate()
+
+  const customNavigate = (url, options) => {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      window.location.href = url
+    } else {
+      navigate(url, { replace: options?.replace })
+    }
+  }
+
+  return (
+    <AuthProvider
+      config={logtoConfig}
+      callbackUrl="/callback"
+      customNavigate={customNavigate}
+      enablePopupSignIn={true} // Popup mode
+    >
+      {children}
+    </AuthProvider>
+  )
+}
+```
+
+<Info>
+When using popup sign-in, the main window navigation is handled by your custom function, while the popup window uses its own navigation context.
+</Info>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Full page reload after sign-in">
+    Make sure your `customNavigate` function is properly handling relative URLs. Check that you're not falling back to `window.location.href` for internal routes.
+  </Accordion>
+  
+  <Accordion title="Navigation not working">
+    Verify that your router hook is available in the component where you define `customNavigate`. For React Router, ensure you're inside a `<BrowserRouter>`. For Next.js, make sure you're in a client component (`'use client'`).
+  </Accordion>
+  
+  <Accordion title="Infinite redirects">
+    Check that your callback URL matches the route where you render `<CallbackPage />`. Mismatched URLs can cause redirect loops.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="AuthProvider" icon="layer-group" href="/frontend/auth-provider">
+    Learn more about AuthProvider configuration
+  </Card>
+  
+  <Card title="useAuth Hook" icon="code" href="/frontend/use-auth">
+    Learn more about the useAuth hook
+  </Card>
+</CardGroup>

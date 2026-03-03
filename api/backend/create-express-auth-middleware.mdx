@@ -1,0 +1,284 @@
+---
+title: 'createExpressAuthMiddleware'
+description: 'Express middleware factory for Logto authentication'
+---
+
+## Overview
+
+The `createExpressAuthMiddleware` function creates an Express middleware that automatically verifies Logto authentication tokens and attaches authentication context to the request object.
+
+## Signature
+
+```typescript
+function createExpressAuthMiddleware(
+  options: VerifyAuthOptions
+): (req: ExpressRequest, res: ExpressResponse, next: ExpressNext) => void
+```
+
+## Parameters
+
+<ParamField path="options" type="VerifyAuthOptions" required>
+  Configuration options for token verification
+  
+  <Expandable title="VerifyAuthOptions properties">
+    <ParamField path="logtoUrl" type="string" required>
+      Your Logto server URL (e.g., `https://your-logto.app`)
+    </ParamField>
+    
+    <ParamField path="audience" type="string" required>
+      Expected audience claim in the token (your application identifier)
+    </ParamField>
+    
+    <ParamField path="cookieName" type="string" optional default="logto_authtoken">
+      Name of the cookie containing the auth token
+    </ParamField>
+    
+    <ParamField path="requiredScope" type="string" optional>
+      Required OAuth scope that must be present in the token
+    </ParamField>
+    
+    <ParamField path="allowGuest" type="boolean" optional default={false}>
+      Allow guest access when no valid token is found. Attaches guest context instead of returning 401
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Returns
+
+<ResponseField name="middleware" type="ExpressMiddleware">
+  Express middleware function that can be used with `app.use()` or route handlers
+</ResponseField>
+
+## Request Enhancement
+
+The middleware adds an `auth` property to the Express request object:
+
+```typescript
+req.auth: AuthContext
+```
+
+<Expandable title="AuthContext properties">
+  <ResponseField name="userId" type="string | null">
+    User ID from the token's `sub` claim, or `null` for guest users
+  </ResponseField>
+  
+  <ResponseField name="isAuthenticated" type="boolean">
+    Whether the user is authenticated (`true`) or guest (`false`)
+  </ResponseField>
+  
+  <ResponseField name="payload" type="AuthPayload | null">
+    Decoded JWT payload, or `null` for guest users
+  </ResponseField>
+  
+  <ResponseField name="isGuest" type="boolean" optional>
+    `true` if this is a guest context (only when `allowGuest: true`)
+  </ResponseField>
+  
+  <ResponseField name="guestId" type="string" optional>
+    Unique identifier for guest users (auto-generated UUID)
+  </ResponseField>
+</Expandable>
+
+## Examples
+
+### Basic Setup
+
+```typescript
+import express from 'express'
+import { createExpressAuthMiddleware } from 'simple-logto/backend'
+
+const app = express()
+
+const authMiddleware = createExpressAuthMiddleware({
+  logtoUrl: process.env.LOGTO_URL,
+  audience: process.env.LOGTO_AUDIENCE
+})
+
+// Apply to all routes
+app.use(authMiddleware)
+
+app.get('/profile', (req, res) => {
+  res.json({
+    userId: req.auth.userId,
+    authenticated: req.auth.isAuthenticated
+  })
+})
+
+app.listen(3000)
+```
+
+### Protected Routes Only
+
+```typescript
+import express from 'express'
+import { createExpressAuthMiddleware } from 'simple-logto/backend'
+
+const app = express()
+
+const authMiddleware = createExpressAuthMiddleware({
+  logtoUrl: process.env.LOGTO_URL,
+  audience: process.env.LOGTO_AUDIENCE
+})
+
+// Public route (no auth required)
+app.get('/public', (req, res) => {
+  res.json({ message: 'Public endpoint' })
+})
+
+// Protected routes
+app.get('/api/user', authMiddleware, (req, res) => {
+  res.json({ userId: req.auth.userId })
+})
+
+app.post('/api/data', authMiddleware, (req, res) => {
+  const userId = req.auth.userId
+  // Handle authenticated request
+  res.json({ success: true })
+})
+```
+
+### With Guest Support
+
+```typescript
+import express from 'express'
+import { createExpressAuthMiddleware } from 'simple-logto/backend'
+
+const app = express()
+
+const authMiddleware = createExpressAuthMiddleware({
+  logtoUrl: process.env.LOGTO_URL,
+  audience: process.env.LOGTO_AUDIENCE,
+  allowGuest: true // Allow unauthenticated access
+})
+
+app.use(authMiddleware)
+
+app.get('/api/content', (req, res) => {
+  if (req.auth.isGuest) {
+    res.json({
+      message: 'Limited content for guests',
+      guestId: req.auth.guestId
+    })
+  } else {
+    res.json({
+      message: 'Full content for authenticated users',
+      userId: req.auth.userId
+    })
+  }
+})
+```
+
+### With Required Scope
+
+```typescript
+import express from 'express'
+import { createExpressAuthMiddleware } from 'simple-logto/backend'
+
+const app = express()
+
+const adminAuthMiddleware = createExpressAuthMiddleware({
+  logtoUrl: process.env.LOGTO_URL,
+  audience: process.env.LOGTO_AUDIENCE,
+  requiredScope: 'admin:write'
+})
+
+// Admin-only endpoint
+app.delete('/api/users/:id', adminAuthMiddleware, (req, res) => {
+  // Only users with admin:write scope can access this
+  res.json({ success: true })
+})
+```
+
+### Custom Cookie Name
+
+```typescript
+import express from 'express'
+import { createExpressAuthMiddleware } from 'simple-logto/backend'
+
+const app = express()
+
+const authMiddleware = createExpressAuthMiddleware({
+  logtoUrl: process.env.LOGTO_URL,
+  audience: process.env.LOGTO_AUDIENCE,
+  cookieName: 'my_custom_auth_cookie'
+})
+
+app.use(authMiddleware)
+```
+
+### Error Handling
+
+```typescript
+import express from 'express'
+import { createExpressAuthMiddleware } from 'simple-logto/backend'
+
+const app = express()
+
+const authMiddleware = createExpressAuthMiddleware({
+  logtoUrl: process.env.LOGTO_URL,
+  audience: process.env.LOGTO_AUDIENCE
+})
+
+app.use(authMiddleware)
+
+// Authentication errors return 401 automatically
+// Add error handler for custom error responses
+app.use((err, req, res, next) => {
+  if (err.status === 401) {
+    res.status(401).json({
+      error: 'Unauthorized',
+      message: 'Please sign in to access this resource'
+    })
+  } else {
+    next(err)
+  }
+})
+```
+
+## Behavior
+
+### Token Extraction
+
+The middleware extracts tokens in this order:
+1. Cookie (using `cookieName` option, defaults to `logto_authtoken`)
+2. Authorization header (Bearer token)
+
+### Authentication Responses
+
+**When `allowGuest: false` (default):**
+- No token found: Returns 401 with error message
+- Invalid token: Returns 401 with error details
+- Valid token: Attaches `AuthContext` to `req.auth` and calls `next()`
+
+**When `allowGuest: true`:**
+- No token found: Attaches guest `AuthContext` to `req.auth` and calls `next()`
+- Invalid token: Attaches guest `AuthContext` to `req.auth` and calls `next()`
+- Valid token: Attaches authenticated `AuthContext` to `req.auth` and calls `next()`
+
+### Cookie Parsing
+
+The middleware automatically handles cookie parsing:
+- If cookies are not already parsed, it applies `cookie-parser` internally
+- No need to manually add `cookie-parser` middleware when using this middleware
+
+## TypeScript Support
+
+Extend the Express request type to include the `auth` property:
+
+```typescript
+import type { AuthContext } from 'simple-logto/backend'
+
+declare global {
+  namespace Express {
+    interface Request {
+      auth: AuthContext
+    }
+  }
+}
+```
+
+## See Also
+
+- [verifyAuth](/api/backend/verify-auth) - Generic verification function
+- [verifyNextAuth](/api/backend/verify-next-auth) - Next.js authentication helper
+- [useAuth](/api/hooks/use-auth) - React hook for client-side authentication

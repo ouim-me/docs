@@ -1,0 +1,218 @@
+---
+title: "Bundler Configuration"
+description: "Configuration utilities for resolving jose library issues in different bundlers"
+---
+
+Utilities to help configure your bundler (Vite, Webpack, or Next.js) to properly resolve the `jose` library dependency.
+
+## Overview
+
+Simple Logto uses the `jose` library for JWT operations. Some bundlers require special configuration to properly resolve this dependency. These utilities provide the necessary configuration for different build tools.
+
+## Functions
+
+### getBundlerConfig
+
+Returns bundler-specific configuration for resolving the `jose` library.
+
+```typescript
+getBundlerConfig(bundler?: 'vite' | 'webpack' | 'nextjs'): BundlerConfig
+```
+
+<ResponseField name="bundler" type="'vite' | 'webpack' | 'nextjs'" default="vite">
+  The bundler type to generate configuration for
+</ResponseField>
+
+**Returns:** `BundlerConfig` - Configuration object specific to the bundler
+
+## Pre-configured Exports
+
+### viteConfig
+
+Pre-configured settings for Vite projects.
+
+```typescript
+export const viteConfig: BundlerConfig
+```
+
+### webpackConfig
+
+Pre-configured settings for Webpack projects.
+
+```typescript
+export const webpackConfig: BundlerConfig
+```
+
+### nextjsConfig
+
+Pre-configured settings for Next.js projects.
+
+```typescript
+export const nextjsConfig: BundlerConfig
+```
+
+## Type Definitions
+
+### BundlerConfig
+
+```typescript
+interface BundlerConfig {
+  optimizeDeps?: {
+    include: string[]
+  }
+  resolve?: {
+    alias: Record<string, string>
+  }
+  alias?: Record<string, string>
+}
+```
+
+<ResponseField name="optimizeDeps" type="{ include: string[] }">
+  Vite-specific dependency optimization settings
+</ResponseField>
+
+<ResponseField name="resolve" type="{ alias: Record<string, string> }">
+  Module resolution aliases
+</ResponseField>
+
+<ResponseField name="alias" type="Record<string, string>">
+  Alternative alias format for some bundlers
+</ResponseField>
+
+## Usage Examples
+
+### Vite
+
+Add to your `vite.config.ts`:
+
+```typescript
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import { viteConfig } from 'simple-logto/bundler-config'
+
+export default defineConfig({
+  plugins: [react()],
+  ...viteConfig,
+})
+```
+
+Or use the function:
+
+```typescript
+import { getBundlerConfig } from 'simple-logto/bundler-config'
+
+const bundlerConfig = getBundlerConfig('vite')
+
+export default defineConfig({
+  plugins: [react()],
+  optimizeDeps: bundlerConfig.optimizeDeps,
+  resolve: bundlerConfig.resolve,
+})
+```
+
+### Webpack
+
+Add to your `webpack.config.js`:
+
+```javascript
+const { webpackConfig } = require('simple-logto/bundler-config')
+
+module.exports = {
+  // ... other webpack config
+  resolve: webpackConfig.resolve,
+}
+```
+
+### Next.js
+
+Add to your `next.config.js`:
+
+```javascript
+const { nextjsConfig } = require('simple-logto/bundler-config')
+
+module.exports = {
+  // ... other Next.js config
+  webpack: (config) => {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      ...nextjsConfig.resolve.alias,
+    }
+    return config
+  },
+}
+```
+
+Or in TypeScript (`next.config.ts`):
+
+```typescript
+import type { NextConfig } from 'next'
+import { nextjsConfig } from 'simple-logto/bundler-config'
+
+const config: NextConfig = {
+  webpack: (config) => {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      ...nextjsConfig.resolve?.alias,
+    }
+    return config
+  },
+}
+
+export default config
+```
+
+### Custom Bundler
+
+For other bundlers, use the `getBundlerConfig` function:
+
+```typescript
+import { getBundlerConfig } from 'simple-logto/bundler-config'
+
+// Get the base jose alias
+const config = getBundlerConfig() // Returns { alias: { jose: 'jose/dist/node/cjs' } }
+
+// Apply to your custom bundler configuration
+customBundler.setAlias(config.alias)
+```
+
+## What Does This Fix?
+
+The `jose` library has different builds for different environments. These configurations ensure that:
+
+1. The correct CommonJS build is used (`jose/dist/node/cjs`)
+2. Dependencies are properly optimized for Vite
+3. Module resolution works correctly across different bundlers
+
+Without this configuration, you may encounter errors like:
+- `Cannot find module 'jose'`
+- `Error: Package subpath './jwt/verify' is not defined`
+- Module resolution failures during build
+
+## Configuration Details
+
+### Vite Configuration
+
+```typescript
+{
+  optimizeDeps: {
+    include: ['@logto/react', '@ouim/better-logto-react'],
+  },
+  resolve: {
+    alias: {
+      jose: 'jose/dist/node/cjs',
+    },
+  },
+}
+```
+
+### Webpack/Next.js Configuration
+
+```typescript
+{
+  resolve: {
+    alias: {
+      jose: 'jose/dist/node/cjs',
+    },
+  },
+}
+```

@@ -1,0 +1,603 @@
+---
+title: 'Generic Usage'
+description: 'Use verifyAuth in any Node.js environment'
+icon: 'code'
+---
+
+## Overview
+
+The `verifyAuth` function is a flexible authentication utility that works in any Node.js environment. It accepts either a raw JWT token string or a request object with cookies/headers.
+
+## Function Signature
+
+```typescript
+function verifyAuth(
+  tokenOrRequest: string | { cookies?: any; headers?: any },
+  options: VerifyAuthOptions
+): Promise<AuthContext>
+```
+
+### Parameters
+
+<ParamField path="tokenOrRequest" type="string | object" required>
+  Either a JWT token string or a request object containing cookies and/or headers
+  
+  <Expandable title="Request object structure">
+    ```typescript
+    {
+      cookies?: { [key: string]: string },  // Cookie object
+      headers?: { [key: string]: string }   // Headers object
+    }
+    ```
+  </Expandable>
+</ParamField>
+
+<ParamField path="options" type="VerifyAuthOptions" required>
+  Authentication configuration options
+  
+  <Expandable title="VerifyAuthOptions properties">
+    <ParamField path="logtoUrl" type="string" required>
+      Your Logto server URL (e.g., `https://your-tenant.logto.app`)
+    </ParamField>
+    
+    <ParamField path="audience" type="string" required>
+      API resource identifier registered in Logto
+    </ParamField>
+    
+    <ParamField path="cookieName" type="string" default="logto_authtoken">
+      Custom cookie name if changed in frontend
+    </ParamField>
+    
+    <ParamField path="requiredScope" type="string">
+      Required scope that must be present in the token
+    </ParamField>
+    
+    <ParamField path="allowGuest" type="boolean" default="false">
+      Enable guest mode for unauthenticated users
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Return Value
+
+<ResponseField name="AuthContext" type="object" required>
+  User authentication context
+  
+  <Expandable title="AuthContext properties">
+    <ResponseField name="userId" type="string | null">
+      Logto user ID from the `sub` claim (null for guests)
+    </ResponseField>
+    
+    <ResponseField name="isAuthenticated" type="boolean">
+      Whether the user is authenticated
+    </ResponseField>
+    
+    <ResponseField name="payload" type="AuthPayload | null">
+      Full JWT payload with all claims (null for guests)
+    </ResponseField>
+    
+    <ResponseField name="isGuest" type="boolean">
+      Whether user is in guest mode
+    </ResponseField>
+    
+    <ResponseField name="guestId" type="string">
+      Generated UUID for guest users
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Errors
+
+Throws an error when:
+- No token found in request and `allowGuest` is false
+- Invalid JWT format
+- Token signature verification fails
+- Token has expired
+- Invalid issuer or audience
+- Missing required scope
+
+## Usage Examples
+
+### With Raw Token String
+
+Verify a JWT token directly:
+
+```typescript
+import { verifyAuth } from 'simple-logto/backend';
+
+const token = 'eyJhbGciOiJSUzI1NiIs...';
+
+try {
+  const auth = await verifyAuth(token, {
+    logtoUrl: 'https://your-tenant.logto.app',
+    audience: 'https://api.yourapp.com',
+  });
+
+  console.log('User ID:', auth.userId);
+  console.log('Email:', auth.payload.email);
+} catch (error) {
+  console.error('Authentication failed:', error.message);
+}
+```
+
+### With Request Object
+
+Extract token automatically from cookies or headers:
+
+```typescript
+import { verifyAuth } from 'simple-logto/backend';
+
+// Example request object
+const request = {
+  cookies: { logto_authtoken: 'eyJhbGciOiJSUzI1NiIs...' },
+  headers: { authorization: 'Bearer eyJhbGciOiJSUzI1NiIs...' },
+};
+
+try {
+  const auth = await verifyAuth(request, {
+    logtoUrl: process.env.LOGTO_URL,
+    audience: process.env.LOGTO_API_RESOURCE,
+  });
+
+  console.log('Authenticated:', auth.isAuthenticated);
+  console.log('User ID:', auth.userId);
+} catch (error) {
+  console.error('Authentication failed:', error.message);
+}
+```
+
+### AWS Lambda Function
+
+```typescript
+import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { verifyAuth } from 'simple-logto/backend';
+
+export const handler = async (
+  event: APIGatewayProxyEvent
+): Promise<APIGatewayProxyResult> => {
+  try {
+    // Extract token from Lambda event
+    const token = event.headers.Authorization?.replace('Bearer ', '');
+    
+    if (!token) {
+      return {
+        statusCode: 401,
+        body: JSON.stringify({ error: 'No token provided' }),
+      };
+    }
+
+    const auth = await verifyAuth(token, {
+      logtoUrl: process.env.LOGTO_URL!,
+      audience: process.env.LOGTO_API_RESOURCE!,
+    });
+
+    // Your Lambda logic
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ 
+        message: 'Success',
+        userId: auth.userId 
+      }),
+    };
+  } catch (error) {
+    return {
+      statusCode: 401,
+      body: JSON.stringify({ 
+        error: 'Authentication failed',
+        message: error.message 
+      }),
+    };
+  }
+};
+```
+
+### Cloudflare Workers
+
+```typescript
+import { verifyAuth } from 'simple-logto/backend';
+
+export default {
+  async fetch(request: Request): Promise<Response> {
+    try {
+      // Extract token from Authorization header
+      const authHeader = request.headers.get('Authorization');
+      const token = authHeader?.replace('Bearer ', '');
+
+      if (!token) {
+        return new Response(
+          JSON.stringify({ error: 'No token provided' }),
+          { status: 401, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const auth = await verifyAuth(token, {
+        logtoUrl: 'https://your-tenant.logto.app',
+        audience: 'https://api.yourapp.com',
+      });
+
+      // Your worker logic
+      return new Response(
+        JSON.stringify({ userId: auth.userId }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    } catch (error) {
+      return new Response(
+        JSON.stringify({ error: error.message }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+  },
+};
+```
+
+### GraphQL Resolver Context
+
+```typescript
+import { ApolloServer } from '@apollo/server';
+import { verifyAuth } from 'simple-logto/backend';
+
+const server = new ApolloServer({
+  typeDefs,
+  resolvers,
+  context: async ({ req }) => {
+    try {
+      const auth = await verifyAuth(
+        {
+          cookies: req.cookies,
+          headers: req.headers,
+        },
+        {
+          logtoUrl: process.env.LOGTO_URL!,
+          audience: process.env.LOGTO_API_RESOURCE!,
+          allowGuest: true, // Allow unauthenticated GraphQL queries
+        }
+      );
+
+      return { auth };
+    } catch (error) {
+      return { auth: null };
+    }
+  },
+});
+
+// In resolvers
+const resolvers = {
+  Query: {
+    me: async (_parent, _args, context) => {
+      if (!context.auth?.isAuthenticated) {
+        throw new Error('Not authenticated');
+      }
+      
+      return getUserById(context.auth.userId);
+    },
+  },
+};
+```
+
+### tRPC Middleware
+
+```typescript
+import { initTRPC } from '@trpc/server';
+import { verifyAuth } from 'simple-logto/backend';
+
+const t = initTRPC.context().create();
+
+const isAuthed = t.middleware(async ({ ctx, next }) => {
+  const auth = await verifyAuth(
+    {
+      cookies: ctx.req.cookies,
+      headers: ctx.req.headers,
+    },
+    {
+      logtoUrl: process.env.LOGTO_URL!,
+      audience: process.env.LOGTO_API_RESOURCE!,
+    }
+  );
+
+  if (!auth.isAuthenticated) {
+    throw new Error('Not authenticated');
+  }
+
+  return next({
+    ctx: {
+      auth,
+    },
+  });
+});
+
+export const protectedProcedure = t.procedure.use(isAuthed);
+
+// Usage
+export const appRouter = t.router({
+  getProfile: protectedProcedure.query(({ ctx }) => {
+    return getUserById(ctx.auth.userId);
+  }),
+});
+```
+
+### Fastify Plugin
+
+```typescript
+import Fastify from 'fastify';
+import { verifyAuth } from 'simple-logto/backend';
+
+const fastify = Fastify();
+
+// Register auth decorator
+fastify.decorateRequest('auth', null);
+
+// Auth hook
+fastify.addHook('preHandler', async (request, reply) => {
+  if (request.routeOptions.config?.auth === false) {
+    return; // Skip auth for public routes
+  }
+
+  try {
+    const auth = await verifyAuth(
+      {
+        cookies: request.cookies,
+        headers: request.headers,
+      },
+      {
+        logtoUrl: process.env.LOGTO_URL!,
+        audience: process.env.LOGTO_API_RESOURCE!,
+      }
+    );
+
+    request.auth = auth;
+  } catch (error) {
+    reply.code(401).send({ error: 'Unauthorized' });
+  }
+});
+
+// Protected route
+fastify.get('/api/profile', async (request) => {
+  return { userId: request.auth.userId };
+});
+
+// Public route
+fastify.get('/api/health', { config: { auth: false } }, async () => {
+  return { status: 'ok' };
+});
+```
+
+### Hono Middleware
+
+```typescript
+import { Hono } from 'hono';
+import { verifyAuth } from 'simple-logto/backend';
+
+const app = new Hono();
+
+// Auth middleware
+const authMiddleware = async (c, next) => {
+  try {
+    const auth = await verifyAuth(
+      {
+        cookies: c.req.cookies,
+        headers: c.req.headers,
+      },
+      {
+        logtoUrl: process.env.LOGTO_URL!,
+        audience: process.env.LOGTO_API_RESOURCE!,
+      }
+    );
+
+    c.set('auth', auth);
+    await next();
+  } catch (error) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+};
+
+// Use middleware
+app.use('/api/*', authMiddleware);
+
+app.get('/api/profile', (c) => {
+  const auth = c.get('auth');
+  return c.json({ userId: auth.userId });
+});
+```
+
+### Next.js Server Actions
+
+```typescript
+'use server'
+
+import { cookies } from 'next/headers';
+import { verifyAuth } from 'simple-logto/backend';
+
+export async function createPost(formData: FormData) {
+  const cookieStore = cookies();
+  const token = cookieStore.get('logto_authtoken')?.value;
+
+  if (!token) {
+    throw new Error('Unauthorized');
+  }
+
+  const auth = await verifyAuth(token, {
+    logtoUrl: process.env.LOGTO_URL!,
+    audience: process.env.LOGTO_API_RESOURCE!,
+  });
+
+  // Create post with authenticated user
+  const post = await db.post.create({
+    data: {
+      title: formData.get('title') as string,
+      content: formData.get('content') as string,
+      authorId: auth.userId,
+    },
+  });
+
+  return post;
+}
+```
+
+## Guest Mode
+
+When `allowGuest: true`, the function returns guest context instead of throwing errors:
+
+```typescript
+const auth = await verifyAuth(request, {
+  logtoUrl: process.env.LOGTO_URL!,
+  audience: process.env.LOGTO_API_RESOURCE!,
+  allowGuest: true,
+});
+
+if (auth.isAuthenticated) {
+  // Authenticated user
+  console.log('User ID:', auth.userId);
+  console.log('Email:', auth.payload.email);
+} else if (auth.isGuest) {
+  // Guest user
+  console.log('Guest ID:', auth.guestId);
+}
+```
+
+## Error Handling
+
+### Without Guest Mode
+
+```typescript
+try {
+  const auth = await verifyAuth(token, { ... });
+  // Use auth.userId, auth.payload, etc.
+} catch (error) {
+  if (error.message.includes('expired')) {
+    // Handle expired token
+  } else if (error.message.includes('Invalid audience')) {
+    // Handle wrong audience
+  } else {
+    // Handle other errors
+  }
+}
+```
+
+### With Guest Mode
+
+```typescript
+const auth = await verifyAuth(request, {
+  allowGuest: true,
+  // ... other options
+});
+
+// Never throws - always returns auth context
+if (auth.isAuthenticated) {
+  // Proceed with authenticated user
+} else {
+  // Proceed with guest user
+}
+```
+
+## Token Extraction Priority
+
+When passing a request object, tokens are checked in this order:
+
+1. **Cookie**: `cookies[cookieName]` (default: `logto_authtoken`)
+2. **Authorization Header**: `headers.authorization` (Bearer token)
+
+```typescript
+const request = {
+  cookies: { logto_authtoken: 'token-from-cookie' },
+  headers: { authorization: 'Bearer token-from-header' },
+};
+
+// Will use 'token-from-cookie' (cookies take precedence)
+const auth = await verifyAuth(request, { ... });
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use Environment Variables">
+    Store Logto configuration in environment variables:
+    
+    ```typescript
+    const auth = await verifyAuth(token, {
+      logtoUrl: process.env.LOGTO_URL!,
+      audience: process.env.LOGTO_API_RESOURCE!,
+    });
+    ```
+  </Accordion>
+  
+  <Accordion title="Handle Errors Gracefully">
+    Always wrap calls in try-catch unless using `allowGuest`:
+    
+    ```typescript
+    try {
+      const auth = await verifyAuth(token, { ... });
+    } catch (error) {
+      // Return appropriate error response
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Validate isAuthenticated">
+    When using guest mode, always check authentication status:
+    
+    ```typescript
+    if (!auth.isAuthenticated) {
+      throw new Error('Authentication required');
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Cache Configuration">
+    Create a reusable configuration object:
+    
+    ```typescript
+    const authOptions = {
+      logtoUrl: process.env.LOGTO_URL!,
+      audience: process.env.LOGTO_API_RESOURCE!,
+    };
+    
+    const auth = await verifyAuth(token, authOptions);
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Type Definitions
+
+```typescript
+import type {
+  AuthContext,
+  AuthPayload,
+  VerifyAuthOptions,
+} from 'simple-logto/backend';
+
+// AuthPayload - JWT token claims
+interface AuthPayload {
+  sub: string;              // User ID
+  scope: string;            // Space-separated scopes
+  [key: string]: any;       // Additional custom claims
+}
+
+// AuthContext - Authentication result
+interface AuthContext {
+  userId: string | null;
+  isAuthenticated: boolean;
+  payload: AuthPayload | null;
+  isGuest?: boolean;
+  guestId?: string;
+}
+
+// VerifyAuthOptions - Configuration
+interface VerifyAuthOptions {
+  logtoUrl: string;
+  audience: string;
+  cookieName?: string;
+  requiredScope?: string;
+  allowGuest?: boolean;
+}
+```
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Express Middleware" icon="node-js" href="/backend/express-middleware">
+    Ready-to-use Express middleware
+  </Card>
+  <Card title="Next.js Integration" icon="react" href="/backend/nextjs-integration">
+    Next.js-specific authentication
+  </Card>
+</CardGroup>

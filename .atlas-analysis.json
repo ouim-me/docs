@@ -1,0 +1,128 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "Simple Logto",
+  "projectDescription": "A simpler way to use @logto/react with prebuilt UI components and hooks for fast authentication setup in React apps.",
+  "theme": "mint",
+  "primaryColor": "#6366f1",
+  "lightColor": "#818cf8",
+  "darkColor": "#4f46e5",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Frontend",
+            "pages": [
+              "frontend/auth-provider",
+              "frontend/user-center",
+              "frontend/callback-page",
+              "frontend/use-auth",
+              "frontend/route-protection"
+            ]
+          },
+          {
+            "group": "Backend",
+            "pages": [
+              "backend/overview",
+              "backend/express-middleware",
+              "backend/nextjs-integration",
+              "backend/generic-usage"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/bundler-setup",
+              "configuration/guest-mode",
+              "configuration/custom-navigation"
+            ]
+          },
+          {
+            "group": "Examples",
+            "pages": [
+              "examples/react-spa",
+              "examples/nextjs-app",
+              "examples/protected-routes"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Components",
+            "pages": [
+              "api/components/auth-provider",
+              "api/components/user-center",
+              "api/components/callback-page",
+              "api/components/sign-in-page"
+            ]
+          },
+          {
+            "group": "Hooks",
+            "pages": [
+              "api/hooks/use-auth"
+            ]
+          },
+          {
+            "group": "Backend",
+            "pages": [
+              "api/backend/verify-auth",
+              "api/backend/create-express-auth-middleware",
+              "api/backend/verify-next-auth"
+            ]
+          },
+          {
+            "group": "Types",
+            "pages": [
+              "api/types/frontend-types",
+              "api/types/backend-types"
+            ]
+          },
+          {
+            "group": "Utilities",
+            "pages": [
+              "api/utilities/bundler-config",
+              "api/utilities/cookie-utils"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Prebuilt React components for authentication (AuthProvider, UserCenter, CallbackPage)",
+    "useAuth hook for accessing user and auth actions with route protection",
+    "Backend JWT verification with Express and Next.js middleware",
+    "Guest mode support with fingerprinting",
+    "Built-in bundler configuration for Vite, Webpack, and Next.js",
+    "Full TypeScript support with comprehensive type definitions"
+  ],
+  "publicApiSurface": [
+    "AuthProvider",
+    "UserCenter",
+    "CallbackPage",
+    "SignInPage",
+    "useAuth",
+    "createExpressAuthMiddleware",
+    "verifyNextAuth",
+    "verifyAuth",
+    "getBundlerConfig",
+    "viteConfig",
+    "webpackConfig",
+    "nextjsConfig",
+    "cookieUtils",
+    "jwtCookieUtils",
+    "validateLogtoConfig"
+  ]
+}

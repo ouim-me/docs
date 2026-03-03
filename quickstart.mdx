@@ -1,0 +1,252 @@
+---
+title: Quick start
+description: Get up and running with Simple Logto authentication in minutes
+---
+
+# Quick start
+
+This guide will help you set up Simple Logto authentication in your React application in just a few steps.
+
+## Prerequisites
+
+Before you begin, make sure you have:
+
+- A Logto account and application configured
+- Your Logto endpoint URL and app ID
+- Simple Logto installed in your project
+
+<Note>
+  Don't have a Logto account? [Sign up for free](https://logto.io) and create your first application.
+</Note>
+
+## Setup steps
+
+<Steps>
+
+<Step title="Wrap your app with AuthProvider">
+
+Wrap your application with the `AuthProvider` component and pass your Logto configuration:
+
+```tsx src/App.tsx
+import { AuthProvider } from '@ouim/simple-logto'
+
+const config = {
+  endpoint: 'https://your-logto-endpoint.com',
+  appId: 'your-app-id',
+}
+
+function App() {
+  return (
+    <AuthProvider
+      config={config}
+      callbackUrl="http://localhost:3000/callback"
+    >
+      <YourApp />
+    </AuthProvider>
+  )
+}
+```
+
+<Tip>
+  For single-page applications, pass a `customNavigate` function to integrate with your router:
+  
+  ```tsx
+  <AuthProvider
+    config={config}
+    callbackUrl="http://localhost:3000/callback"
+    customNavigate={(url, options) => {
+      // Your navigation logic here
+    }}
+  >
+  ```
+</Tip>
+
+</Step>
+
+<Step title="Add the UserCenter component">
+
+Drop the `UserCenter` component into your navbar for a ready-to-use user menu:
+
+```tsx src/components/Navbar.tsx
+import { UserCenter } from '@ouim/simple-logto'
+
+function Navbar() {
+  return (
+    <nav className="flex items-center justify-between h-16 px-4 border-b">
+      <div className="font-bold">MyApp</div>
+      <UserCenter />
+    </nav>
+  )
+}
+```
+
+The `UserCenter` component automatically shows:
+- Avatar, name, and sign out button when authenticated
+- Sign in button when not authenticated
+
+<Note>
+  Customize the `UserCenter` with additional pages:
+  
+  ```tsx
+  <UserCenter
+    additionalPages={[
+      { link: '/settings', text: 'Settings' },
+      { link: '/profile', text: 'Profile' }
+    ]}
+  />
+  ```
+</Note>
+
+</Step>
+
+<Step title="Create a callback route">
+
+Create a route at `/callback` and render the `CallbackPage` component to handle OAuth redirects:
+
+```tsx src/pages/Callback.tsx
+import { CallbackPage } from '@ouim/simple-logto'
+
+export default function Callback() {
+  return <CallbackPage />
+}
+```
+
+The `CallbackPage` handles:
+- OAuth callback flow
+- Popup authentication flow
+- Redirects after successful authentication
+
+<Tip>
+  Customize the callback experience with optional props:
+  
+  ```tsx
+  <CallbackPage
+    onSuccess={() => console.log('Auth success!')}
+    onError={(error) => console.error('Auth error:', error)}
+    loadingComponent={<CustomLoader />}
+  />
+  ```
+</Tip>
+
+</Step>
+
+<Step title="Use the useAuth hook">
+
+Access user data and authentication actions anywhere in your app with the `useAuth` hook:
+
+```tsx src/components/Dashboard.tsx
+import { useAuth } from '@ouim/simple-logto'
+
+function Dashboard() {
+  const { user, isLoadingUser, signIn, signOut } = useAuth()
+
+  if (isLoadingUser) return <div>Loading...</div>
+  if (!user) return <button onClick={() => signIn()}>Sign in</button>
+
+  return (
+    <div>
+      <p>Welcome, {user.name}!</p>
+      <button onClick={() => signOut()}>Sign out</button>
+    </div>
+  )
+}
+```
+
+</Step>
+
+</Steps>
+
+## Route protection
+
+Protect routes by requiring authentication with the `middleware` option:
+
+```tsx src/pages/ProtectedPage.tsx
+import { useAuth } from '@ouim/simple-logto'
+
+function ProtectedPage() {
+  const { user } = useAuth({
+    middleware: 'auth',
+    redirectTo: '/login', // Redirect if not authenticated
+  })
+
+  if (!user) return null // or loading indicator
+  
+  return <div>Protected content</div>
+}
+```
+
+## Guest mode
+
+Allow anonymous users to access your app with guest mode:
+
+```tsx src/pages/PublicPage.tsx
+import { useAuth } from '@ouim/simple-logto'
+
+function PublicPage() {
+  const { user } = useAuth({
+    middleware: 'guest', // Allow guest users
+  })
+
+  return (
+    <div>
+      {user ? (
+        <p>Welcome back, {user.name}!</p>
+      ) : (
+        <p>You're browsing as a guest</p>
+      )}
+    </div>
+  )
+}
+```
+
+## Refresh authentication
+
+Manually refresh the authentication state when needed:
+
+```tsx src/components/RefreshButton.tsx
+import { useAuth } from '@ouim/simple-logto'
+
+function RefreshButton() {
+  const { refreshAuth } = useAuth()
+
+  return (
+    <button onClick={refreshAuth}>
+      Refresh Auth
+    </button>
+  )
+}
+```
+
+## Popup sign-in (optional)
+
+Enable popup-based sign-in for a better user experience:
+
+```tsx src/App.tsx
+<AuthProvider
+  config={config}
+  callbackUrl="http://localhost:3000/callback"
+  enablePopupSignIn={true}
+>
+  <YourApp />
+</AuthProvider>
+```
+
+With popup sign-in enabled:
+- Authentication happens in a popup window
+- Main page doesn't reload
+- Users stay on the same page after signing in
+
+<Warning>
+  Popup sign-in requires a `/signin` route. Make sure to create one if using this feature.
+</Warning>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Backend authentication" icon="server" href="/backend/overview">
+    Secure your API endpoints with JWT verification
+  </Card>
+  <Card title="Bundler configuration" icon="gear" href="/configuration/bundler-setup">
+    Configure Vite, Webpack, or Next.js bundlers
+  </Card>
+</CardGroup>

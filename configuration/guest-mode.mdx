@@ -1,0 +1,247 @@
+---
+title: "Guest Mode"
+description: "Enable guest mode to support unauthenticated users with fingerprinting"
+---
+
+Guest mode allows your application to work with both authenticated and unauthenticated users, providing a seamless experience with built-in user fingerprinting.
+
+## Overview
+
+When guest mode is enabled:
+
+- Unauthenticated users automatically get a unique guest ID
+- Guest IDs are stored in localStorage for persistence
+- Your app can track guest users across sessions
+- Guest users can later sign in without losing their data
+
+## Frontend Setup
+
+Use the `useAuth` hook with the `guest` middleware:
+
+```tsx
+import { useAuth } from '@ouim/simple-logto'
+
+function MixedContent() {
+  const { user } = useAuth({
+    middleware: 'guest', // Allow guest users
+  })
+
+  return (
+    <div>
+      {user ? (
+        <p>Welcome back, {user.name}!</p>
+      ) : (
+        <p>You're browsing as a guest</p>
+      )}
+    </div>
+  )
+}
+```
+
+### Middleware Options
+
+The `useAuth` hook supports different middleware modes:
+
+<ParamField path="middleware" type="'auth' | 'guest'">
+  - `'auth'`: Require authentication (redirect if not logged in)
+  - `'guest'`: Allow both authenticated and guest users
+</ParamField>
+
+<ParamField path="redirectTo" type="string">
+  URL to redirect to when authentication is required (used with `middleware: 'auth'`)
+</ParamField>
+
+### Route Protection with Auth Middleware
+
+```tsx
+function ProtectedPage() {
+  const { user } = useAuth({
+    middleware: 'auth',
+    redirectTo: '/login', // Redirect if not authenticated
+  })
+
+  if (!user) return null // or loading indicator
+  
+  return <div>Protected content for {user.name}</div>
+}
+```
+
+## Backend Setup
+
+Enable guest mode in your backend authentication middleware:
+
+### Express.js
+
+```javascript
+import { createExpressAuthMiddleware } from '@ouim/simple-logto/backend'
+
+const authMiddleware = createExpressAuthMiddleware({
+  logtoUrl: 'https://your-logto-domain.com',
+  audience: 'your-api-resource-identifier',
+  cookieName: 'logto_authtoken',
+  allowGuest: true, // Enable guest mode
+})
+
+app.get('/api/content', authMiddleware, (req, res) => {
+  res.json({
+    userId: req.auth.userId,
+    isAuthenticated: req.auth.isAuthenticated,
+    isGuest: req.auth.isGuest,
+    guestId: req.auth.guestId, // Available when isGuest is true
+  })
+})
+```
+
+### Next.js API Routes
+
+```javascript
+import { verifyNextAuth } from '@ouim/simple-logto/backend'
+
+export async function GET(request) {
+  const authResult = await verifyNextAuth(request, {
+    logtoUrl: 'https://your-logto-domain.com',
+    audience: 'your-api-resource-identifier',
+    allowGuest: true, // Enable guest mode
+  })
+
+  if (!authResult.success) {
+    return Response.json({ error: authResult.error }, { status: 401 })
+  }
+
+  return Response.json({
+    userId: authResult.auth.userId,
+    isAuthenticated: authResult.auth.isAuthenticated,
+    isGuest: authResult.auth.isGuest,
+    guestId: authResult.auth.guestId,
+  })
+}
+```
+
+## Auth Context Structure
+
+When guest mode is enabled, the auth context includes additional fields:
+
+```typescript
+interface AuthContext {
+  userId: string | null        // User ID from token (null for guests)
+  isAuthenticated: boolean     // true for authenticated users
+  isGuest: boolean            // true for guest users
+  payload: AuthPayload | null // Full JWT payload (null for guests)
+  guestId?: string            // Guest fingerprint ID (when allowGuest is true)
+}
+```
+
+## How Guest IDs Work
+
+<Steps>
+  <Step title="Guest ID Generation">
+    When a user visits your site without authentication, Simple Logto automatically generates a unique guest ID using browser fingerprinting.
+  </Step>
+  
+  <Step title="Persistence">
+    The guest ID is stored in the browser's localStorage under the key `simple_logto_guest_id`, ensuring the same ID is used across sessions.
+  </Step>
+  
+  <Step title="Backend Verification">
+    When `allowGuest: true` is set, the backend middleware accepts requests with a guest ID cookie instead of requiring a JWT token.
+  </Step>
+  
+  <Step title="Upgrade to Authenticated">
+    When a guest user signs in, they receive a proper JWT token. You can associate their previous guest activity with their authenticated account using the guest ID.
+  </Step>
+</Steps>
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Shopping Cart" icon="cart-shopping">
+    Allow users to add items to cart before signing in, then associate the cart with their account after login.
+  </Card>
+  
+  <Card title="Content Personalization" icon="sparkles">
+    Track guest preferences and browsing history, then merge with their profile when they sign in.
+  </Card>
+  
+  <Card title="Analytics" icon="chart-line">
+    Track user behavior for both authenticated and guest users with a consistent identifier.
+  </Card>
+  
+  <Card title="Gradual Onboarding" icon="stairs">
+    Let users explore your app as guests, then prompt them to sign in when they need advanced features.
+  </Card>
+</CardGroup>
+
+## Example: Tracking Guest to User Conversion
+
+```tsx
+import { useAuth } from '@ouim/simple-logto'
+import { useEffect, useState } from 'react'
+
+function ProductPage() {
+  const { user, isLoadingUser } = useAuth({ middleware: 'guest' })
+  const [guestId, setGuestId] = useState<string | null>(null)
+
+  useEffect(() => {
+    // Store guest ID before user signs in
+    if (!user && typeof window !== 'undefined') {
+      const storedGuestId = localStorage.getItem('simple_logto_guest_id')
+      setGuestId(storedGuestId)
+    }
+  }, [user])
+
+  useEffect(() => {
+    // User just signed in - migrate guest data
+    if (user && guestId) {
+      migrateGuestData(guestId, user.id)
+      setGuestId(null)
+    }
+  }, [user, guestId])
+
+  async function migrateGuestData(guestId: string, userId: string) {
+    // Call your API to associate guest data with the user
+    await fetch('/api/migrate-guest-data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ guestId, userId }),
+    })
+  }
+
+  if (isLoadingUser) return <div>Loading...</div>
+
+  return (
+    <div>
+      {user ? (
+        <p>Welcome back, {user.name}!</p>
+      ) : (
+        <p>Browsing as guest (ID: {guestId})</p>
+      )}
+    </div>
+  )
+}
+```
+
+<Warning>
+Guest IDs are stored in localStorage and can be cleared by the user. Don't rely on them for critical functionality or security. They're best used for convenience features like cart persistence.
+</Warning>
+
+## Configuration Options
+
+<ParamField path="allowGuest" type="boolean" default="false">
+  Enable guest mode in backend middleware
+</ParamField>
+
+<ParamField path="cookieName" type="string" default="'logto_authtoken'">
+  Custom cookie name for both JWT tokens and guest IDs
+</ParamField>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Backend Authentication" icon="shield" href="/backend/overview">
+    Learn more about backend authentication
+  </Card>
+  
+  <Card title="useAuth Hook" icon="hook" href="/frontend/use-auth">
+    Explore all useAuth hook options
+  </Card>
+</CardGroup>

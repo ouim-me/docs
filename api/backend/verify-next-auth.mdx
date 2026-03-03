@@ -1,0 +1,381 @@
+---
+title: 'verifyNextAuth'
+description: 'Next.js authentication verification helper for App Router middleware and API routes'
+---
+
+## Overview
+
+The `verifyNextAuth` function is designed specifically for Next.js App Router, providing authentication verification for middleware and API routes with Next.js-specific request handling.
+
+## Signature
+
+```typescript
+async function verifyNextAuth(
+  request: NextRequest,
+  options: VerifyAuthOptions
+): Promise<
+  | { success: true; auth: AuthContext }
+  | { success: false; error: string; auth?: AuthContext }
+>
+```
+
+## Parameters
+
+<ParamField path="request" type="NextRequest" required>
+  Next.js request object from middleware or API routes
+</ParamField>
+
+<ParamField path="options" type="VerifyAuthOptions" required>
+  Configuration options for token verification
+  
+  <Expandable title="VerifyAuthOptions properties">
+    <ParamField path="logtoUrl" type="string" required>
+      Your Logto server URL (e.g., `https://your-logto.app`)
+    </ParamField>
+    
+    <ParamField path="audience" type="string" required>
+      Expected audience claim in the token (your application identifier)
+    </ParamField>
+    
+    <ParamField path="cookieName" type="string" optional default="logto_authtoken">
+      Name of the cookie containing the auth token
+    </ParamField>
+    
+    <ParamField path="requiredScope" type="string" optional>
+      Required OAuth scope that must be present in the token
+    </ParamField>
+    
+    <ParamField path="allowGuest" type="boolean" optional default={false}>
+      Allow guest access when no valid token is found. Returns guest context in response
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Returns
+
+<ResponseField name="result" type="Promise<VerifyAuthResult>">
+  Promise that resolves to a result object indicating success or failure
+  
+  **Success Response:**
+  <Expandable title="Success object">
+    <ResponseField name="success" type="true">
+      Indicates successful authentication
+    </ResponseField>
+    
+    <ResponseField name="auth" type="AuthContext">
+      Authentication context with user information
+    </ResponseField>
+  </Expandable>
+  
+  **Failure Response:**
+  <Expandable title="Failure object">
+    <ResponseField name="success" type="false">
+      Indicates authentication failed
+    </ResponseField>
+    
+    <ResponseField name="error" type="string">
+      Error message describing why authentication failed
+    </ResponseField>
+    
+    <ResponseField name="auth" type="AuthContext" optional>
+      Guest authentication context (only present when `allowGuest: true`)
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### AuthContext Properties
+
+<Expandable title="AuthContext properties">
+  <ResponseField name="userId" type="string | null">
+    User ID from the token's `sub` claim, or `null` for guest users
+  </ResponseField>
+  
+  <ResponseField name="isAuthenticated" type="boolean">
+    Whether the user is authenticated (`true`) or guest (`false`)
+  </ResponseField>
+  
+  <ResponseField name="payload" type="AuthPayload | null">
+    Decoded JWT payload, or `null` for guest users
+    
+    <Expandable title="AuthPayload properties">
+      <ResponseField name="sub" type="string">
+        User ID (subject claim)
+      </ResponseField>
+      
+      <ResponseField name="scope" type="string">
+        OAuth scopes granted to the token
+      </ResponseField>
+      
+      <ResponseField name="[key: string]" type="any">
+        Additional claims in the JWT payload
+      </ResponseField>
+    </Expandable>
+  </ResponseField>
+  
+  <ResponseField name="isGuest" type="boolean" optional>
+    `true` if this is a guest context (only when `allowGuest: true`)
+  </ResponseField>
+  
+  <ResponseField name="guestId" type="string" optional>
+    Unique identifier for guest users (auto-generated UUID)
+  </ResponseField>
+</Expandable>
+
+## Examples
+
+### Middleware Protection
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server'
+import { verifyNextAuth } from 'simple-logto/backend'
+
+export async function middleware(request: NextRequest) {
+  const result = await verifyNextAuth(request, {
+    logtoUrl: process.env.LOGTO_URL!,
+    audience: process.env.LOGTO_AUDIENCE!
+  })
+
+  if (!result.success) {
+    return NextResponse.redirect(new URL('/login', request.url))
+  }
+
+  // User is authenticated, continue
+  return NextResponse.next()
+}
+
+export const config = {
+  matcher: ['/dashboard/:path*', '/api/protected/:path*']
+}
+```
+
+### API Route Protection
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server'
+import { verifyNextAuth } from 'simple-logto/backend'
+
+export async function GET(request: NextRequest) {
+  const result = await verifyNextAuth(request, {
+    logtoUrl: process.env.LOGTO_URL!,
+    audience: process.env.LOGTO_AUDIENCE!
+  })
+
+  if (!result.success) {
+    return NextResponse.json(
+      { error: result.error },
+      { status: 401 }
+    )
+  }
+
+  // Access authenticated user
+  const userId = result.auth.userId
+
+  return NextResponse.json({
+    message: 'Success',
+    userId
+  })
+}
+```
+
+### With Guest Support
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server'
+import { verifyNextAuth } from 'simple-logto/backend'
+
+export async function GET(request: NextRequest) {
+  const result = await verifyNextAuth(request, {
+    logtoUrl: process.env.LOGTO_URL!,
+    audience: process.env.LOGTO_AUDIENCE!,
+    allowGuest: true
+  })
+
+  if (!result.success) {
+    // Guest user
+    return NextResponse.json({
+      message: 'Limited content for guests',
+      guestId: result.auth?.guestId
+    })
+  }
+
+  // Authenticated user
+  return NextResponse.json({
+    message: 'Full content',
+    userId: result.auth.userId
+  })
+}
+```
+
+### Middleware with Guest Support
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server'
+import { verifyNextAuth } from 'simple-logto/backend'
+
+export async function middleware(request: NextRequest) {
+  const result = await verifyNextAuth(request, {
+    logtoUrl: process.env.LOGTO_URL!,
+    audience: process.env.LOGTO_AUDIENCE!,
+    allowGuest: true
+  })
+
+  // Add auth context to request headers for use in app
+  const requestHeaders = new Headers(request.headers)
+  
+  if (result.success) {
+    requestHeaders.set('x-user-id', result.auth.userId || '')
+    requestHeaders.set('x-is-authenticated', 'true')
+  } else if (result.auth?.isGuest) {
+    requestHeaders.set('x-guest-id', result.auth.guestId || '')
+    requestHeaders.set('x-is-authenticated', 'false')
+  }
+
+  return NextResponse.next({
+    request: {
+      headers: requestHeaders
+    }
+  })
+}
+```
+
+### Role-Based Access Control
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server'
+import { verifyNextAuth } from 'simple-logto/backend'
+
+export async function middleware(request: NextRequest) {
+  const result = await verifyNextAuth(request, {
+    logtoUrl: process.env.LOGTO_URL!,
+    audience: process.env.LOGTO_AUDIENCE!,
+    requiredScope: 'admin:write'
+  })
+
+  if (!result.success) {
+    return NextResponse.json(
+      { error: 'Admin access required' },
+      { status: 403 }
+    )
+  }
+
+  return NextResponse.next()
+}
+
+export const config = {
+  matcher: '/admin/:path*'
+}
+```
+
+### Custom Error Handling
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server'
+import { verifyNextAuth } from 'simple-logto/backend'
+
+export async function GET(request: NextRequest) {
+  const result = await verifyNextAuth(request, {
+    logtoUrl: process.env.LOGTO_URL!,
+    audience: process.env.LOGTO_AUDIENCE!
+  })
+
+  if (!result.success) {
+    // Detailed error handling
+    const statusCode = result.error.includes('expired') ? 401 : 403
+    
+    return NextResponse.json(
+      {
+        error: 'Authentication failed',
+        details: result.error,
+        timestamp: new Date().toISOString()
+      },
+      { status: statusCode }
+    )
+  }
+
+  return NextResponse.json({
+    userId: result.auth.userId,
+    scopes: result.auth.payload?.scope
+  })
+}
+```
+
+### Extracting User Info in Server Component
+
+```typescript
+// app/dashboard/page.tsx
+import { cookies, headers } from 'next/headers'
+import { verifyAuth } from 'simple-logto/backend'
+
+export default async function DashboardPage() {
+  const cookieStore = cookies()
+  const headersList = headers()
+
+  const auth = await verifyAuth(
+    {
+      cookies: Object.fromEntries(cookieStore.getAll().map(c => [c.name, c.value])),
+      headers: Object.fromEntries(headersList.entries())
+    },
+    {
+      logtoUrl: process.env.LOGTO_URL!,
+      audience: process.env.LOGTO_AUDIENCE!
+    }
+  )
+
+  return (
+    <div>
+      <h1>Dashboard</h1>
+      <p>User ID: {auth.userId}</p>
+    </div>
+  )
+}
+```
+
+## Token Extraction Order
+
+The function extracts tokens in this order:
+1. Cookie (using `cookieName` option, defaults to `logto_authtoken`)
+2. Authorization header (Bearer token)
+
+## Response Patterns
+
+### Authenticated User
+```typescript
+{
+  success: true,
+  auth: {
+    userId: 'user-123',
+    isAuthenticated: true,
+    payload: { sub: 'user-123', scope: 'profile email' },
+    isGuest: false
+  }
+}
+```
+
+### Guest User (when `allowGuest: true`)
+```typescript
+{
+  success: false,
+  error: 'No authentication token found',
+  auth: {
+    userId: null,
+    isAuthenticated: false,
+    payload: null,
+    isGuest: true,
+    guestId: 'a1b2c3d4-e5f6-4g7h-8i9j-0k1l2m3n4o5p'
+  }
+}
+```
+
+### Failed Authentication (when `allowGuest: false`)
+```typescript
+{
+  success: false,
+  error: 'No token found in cookies or Authorization header'
+}
+```
+
+## See Also
+
+- [verifyAuth](/api/backend/verify-auth) - Generic verification function
+- [createExpressAuthMiddleware](/api/backend/create-express-auth-middleware) - Express.js middleware
+- [useAuth](/api/hooks/use-auth) - React hook for client-side authentication

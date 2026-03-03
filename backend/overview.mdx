@@ -1,0 +1,167 @@
+---
+title: 'Backend Authentication'
+description: 'Secure your backend routes with Logto authentication'
+icon: 'server'
+---
+
+## Overview
+
+Simple Logto provides flexible backend authentication utilities that work with Express.js, Next.js, and any Node.js environment. All authentication functions verify JWT tokens issued by your Logto server and provide a consistent `AuthContext` object.
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Express Middleware" icon="node-js" href="/backend/express-middleware">
+    Ready-to-use middleware for Express.js applications
+  </Card>
+  <Card title="Next.js Integration" icon="react" href="/backend/nextjs-integration">
+    Server-side authentication for Next.js API routes and middleware
+  </Card>
+  <Card title="Generic Usage" icon="code" href="/backend/generic-usage">
+    Flexible verifyAuth function for any Node.js environment
+  </Card>
+  <Card title="Guest Mode" icon="user">
+    Optional guest mode for unauthenticated users
+  </Card>
+</CardGroup>
+
+## Authentication Flow
+
+All backend authentication functions follow this flow:
+
+1. **Token Extraction**: Checks for JWT token in cookies (default: `logto_authtoken`) or `Authorization` header
+2. **JWKS Fetching**: Retrieves public keys from your Logto server (with 5-minute caching)
+3. **Signature Verification**: Verifies JWT signature using the appropriate public key
+4. **Claims Validation**: Validates issuer, audience, expiration, and required scopes
+5. **Context Creation**: Returns an `AuthContext` object with user information
+
+## AuthContext Object
+
+All authentication functions return or set an `AuthContext` object:
+
+```typescript
+interface AuthContext {
+  userId: string | null          // Logto user ID (sub claim)
+  isAuthenticated: boolean       // Whether user is authenticated
+  payload: AuthPayload | null    // Full JWT payload
+  isGuest?: boolean             // Whether user is in guest mode
+  guestId?: string              // Generated UUID for guest users
+}
+```
+
+## Configuration Options
+
+All authentication functions accept a `VerifyAuthOptions` object:
+
+<ParamField path="logtoUrl" type="string" required>
+  Your Logto server URL (e.g., `https://your-tenant.logto.app`)
+</ParamField>
+
+<ParamField path="audience" type="string" required>
+  The API resource identifier registered in Logto
+</ParamField>
+
+<ParamField path="cookieName" type="string" default="logto_authtoken">
+  Name of the cookie containing the JWT token
+</ParamField>
+
+<ParamField path="requiredScope" type="string">
+  Optional scope that must be present in the token
+</ParamField>
+
+<ParamField path="allowGuest" type="boolean" default="false">
+  Enable guest mode for unauthenticated users. When enabled, failed authentication returns a guest context instead of throwing an error.
+</ParamField>
+
+## Guest Mode
+
+When `allowGuest` is enabled, the authentication functions handle unauthenticated users gracefully:
+
+- No token found: Returns guest context with generated `guestId`
+- Invalid token: Falls back to guest context
+- Guest ID stored in cookie: `guest_logto_authtoken` (auto-generated UUID)
+
+```typescript
+// Example guest context
+{
+  userId: null,
+  isAuthenticated: false,
+  payload: null,
+  isGuest: true,
+  guestId: "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+<Tip>
+Guest mode is useful for applications that support both authenticated and anonymous users, such as e-commerce sites or content platforms.
+</Tip>
+
+## Token Sources
+
+Authentication tokens can be provided in two ways (checked in order):
+
+### 1. Cookie (Recommended)
+
+Set by the frontend authentication SDK:
+
+```http
+Cookie: logto_authtoken=eyJhbGciOiJSUzI1NiIs...
+```
+
+### 2. Authorization Header
+
+Useful for API clients and mobile apps:
+
+```http
+Authorization: Bearer eyJhbGciOiJSUzI1NiIs...
+```
+
+## Error Handling
+
+Authentication functions throw errors in these scenarios:
+
+- **No token found**: When `allowGuest` is disabled and no token is present
+- **Invalid JWT format**: Malformed token structure
+- **Signature verification failed**: Token signature doesn't match public key
+- **Token expired**: Token's `exp` claim is in the past
+- **Invalid issuer**: Token wasn't issued by your Logto server
+- **Invalid audience**: Token's `aud` claim doesn't match your API resource
+- **Missing scope**: Required scope not present in token
+
+<Warning>
+Always handle authentication errors appropriately in production. Return 401 status codes for authentication failures.
+</Warning>
+
+## Security Features
+
+<AccordionGroup>
+  <Accordion title="JWKS Caching">
+    Public keys are cached for 5 minutes to reduce load on your Logto server while maintaining security. The cache is automatically refreshed when expired.
+  </Accordion>
+  
+  <Accordion title="Automatic Cookie Parsing">
+    Express middleware automatically parses cookies using `cookie-parser` if not already available, ensuring seamless integration.
+  </Accordion>
+  
+  <Accordion title="Comprehensive Validation">
+    All JWT claims are validated including issuer, audience, expiration (`exp`), not-before (`nbf`), and custom scopes.
+  </Accordion>
+  
+  <Accordion title="Multiple Token Sources">
+    Supports both cookie-based (for web apps) and header-based (for APIs) authentication in the same endpoint.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={3}>
+  <Card title="Express Setup" icon="node-js" href="/backend/express-middleware">
+    Add middleware to Express routes
+  </Card>
+  <Card title="Next.js Setup" icon="react" href="/backend/nextjs-integration">
+    Protect Next.js API routes
+  </Card>
+  <Card title="Generic Usage" icon="code" href="/backend/generic-usage">
+    Use in any Node.js environment
+  </Card>
+</CardGroup>

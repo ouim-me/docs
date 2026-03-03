@@ -1,0 +1,469 @@
+---
+title: 'Next.js Integration'
+description: 'Authenticate Next.js API routes and middleware'
+icon: 'react'
+---
+
+## Quick Start
+
+Use `verifyNextAuth` to authenticate Next.js App Router API routes and middleware. It handles both cookies and Authorization headers.
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+import { verifyNextAuth } from 'simple-logto/backend';
+
+export async function GET(request: NextRequest) {
+  const result = await verifyNextAuth(request, {
+    logtoUrl: process.env.LOGTO_URL!,
+    audience: process.env.LOGTO_API_RESOURCE!,
+  });
+
+  if (!result.success) {
+    return NextResponse.json(
+      { error: result.error },
+      { status: 401 }
+    );
+  }
+
+  const { userId, payload } = result.auth;
+  
+  return NextResponse.json({
+    userId,
+    email: payload.email,
+  });
+}
+```
+
+## Function Signature
+
+```typescript
+function verifyNextAuth(
+  request: NextRequest,
+  options: VerifyAuthOptions
+): Promise<
+  | { success: true; auth: AuthContext }
+  | { success: false; error: string; auth?: AuthContext }
+>
+```
+
+### Parameters
+
+<ParamField path="request" type="NextRequest" required>
+  The Next.js request object from your API route or middleware
+</ParamField>
+
+<ParamField path="options" type="VerifyAuthOptions" required>
+  Configuration options for authentication
+  
+  <Expandable title="VerifyAuthOptions properties">
+    <ParamField path="logtoUrl" type="string" required>
+      Your Logto server URL (e.g., `https://your-tenant.logto.app`)
+    </ParamField>
+    
+    <ParamField path="audience" type="string" required>
+      API resource identifier registered in Logto
+    </ParamField>
+    
+    <ParamField path="cookieName" type="string" default="logto_authtoken">
+      Custom cookie name if changed in frontend
+    </ParamField>
+    
+    <ParamField path="requiredScope" type="string">
+      Required scope that must be present in the token
+    </ParamField>
+    
+    <ParamField path="allowGuest" type="boolean" default="false">
+      Enable guest mode for unauthenticated users
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Return Value
+
+<ResponseField name="success" type="boolean" required>
+  Whether authentication was successful
+</ResponseField>
+
+<ResponseField name="auth" type="AuthContext">
+  User authentication context (always present when `success: true`, optional with guest mode)
+  
+  <Expandable title="AuthContext properties">
+    <ResponseField name="userId" type="string | null">
+      Logto user ID from the `sub` claim
+    </ResponseField>
+    
+    <ResponseField name="isAuthenticated" type="boolean">
+      Whether the user is authenticated
+    </ResponseField>
+    
+    <ResponseField name="payload" type="AuthPayload | null">
+      Full JWT payload with all claims
+    </ResponseField>
+    
+    <ResponseField name="isGuest" type="boolean">
+      Whether user is in guest mode (when `allowGuest: true`)
+    </ResponseField>
+    
+    <ResponseField name="guestId" type="string">
+      Generated UUID for guest users
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Error message when `success: false`
+</ResponseField>
+
+## Usage Examples
+
+### API Route (App Router)
+
+```typescript
+// app/api/user/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { verifyNextAuth } from 'simple-logto/backend';
+
+export async function GET(request: NextRequest) {
+  const result = await verifyNextAuth(request, {
+    logtoUrl: process.env.LOGTO_URL!,
+    audience: process.env.LOGTO_API_RESOURCE!,
+  });
+
+  if (!result.success) {
+    return NextResponse.json(
+      { error: result.error },
+      { status: 401 }
+    );
+  }
+
+  // Fetch user data from database
+  const user = await db.user.findUnique({
+    where: { id: result.auth.userId },
+  });
+
+  return NextResponse.json({ user });
+}
+```
+
+### POST Route with Data
+
+```typescript
+// app/api/posts/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { verifyNextAuth } from 'simple-logto/backend';
+
+export async function POST(request: NextRequest) {
+  const result = await verifyNextAuth(request, {
+    logtoUrl: process.env.LOGTO_URL!,
+    audience: process.env.LOGTO_API_RESOURCE!,
+  });
+
+  if (!result.success) {
+    return NextResponse.json(
+      { error: 'Unauthorized' },
+      { status: 401 }
+    );
+  }
+
+  const body = await request.json();
+  
+  const post = await db.post.create({
+    data: {
+      ...body,
+      authorId: result.auth.userId,
+    },
+  });
+
+  return NextResponse.json({ post });
+}
+```
+
+### Route with Required Scope
+
+```typescript
+// app/api/admin/users/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { verifyNextAuth } from 'simple-logto/backend';
+
+export async function DELETE(request: NextRequest) {
+  const result = await verifyNextAuth(request, {
+    logtoUrl: process.env.LOGTO_URL!,
+    audience: process.env.LOGTO_API_RESOURCE!,
+    requiredScope: 'admin:users:delete',
+  });
+
+  if (!result.success) {
+    return NextResponse.json(
+      { error: 'Insufficient permissions' },
+      { status: 403 }
+    );
+  }
+
+  // Delete user logic
+  return NextResponse.json({ success: true });
+}
+```
+
+### Next.js Middleware
+
+Protect multiple routes with Next.js middleware:
+
+```typescript
+// middleware.ts
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { verifyNextAuth } from 'simple-logto/backend';
+
+export async function middleware(request: NextRequest) {
+  const result = await verifyNextAuth(request, {
+    logtoUrl: process.env.LOGTO_URL!,
+    audience: process.env.LOGTO_API_RESOURCE!,
+  });
+
+  if (!result.success) {
+    return NextResponse.json(
+      { error: 'Unauthorized' },
+      { status: 401 }
+    );
+  }
+
+  // Add user ID to response headers for downstream use
+  const response = NextResponse.next();
+  response.headers.set('x-user-id', result.auth.userId!);
+  
+  return response;
+}
+
+export const config = {
+  matcher: '/api/protected/:path*',
+};
+```
+
+### Guest Mode
+
+Allow both authenticated and guest users:
+
+```typescript
+// app/api/cart/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { verifyNextAuth } from 'simple-logto/backend';
+
+export async function GET(request: NextRequest) {
+  const result = await verifyNextAuth(request, {
+    logtoUrl: process.env.LOGTO_URL!,
+    audience: process.env.LOGTO_API_RESOURCE!,
+    allowGuest: true,
+  });
+
+  // result.auth is always present with allowGuest
+  const cart = result.auth!.isAuthenticated
+    ? await getCartByUserId(result.auth.userId!)
+    : await getCartByGuestId(result.auth.guestId!);
+
+  return NextResponse.json({ cart });
+}
+```
+
+### Reusable Auth Helper
+
+Create a helper function for consistent authentication:
+
+```typescript
+// lib/auth.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { verifyNextAuth, AuthContext } from 'simple-logto/backend';
+
+type AuthHandler = (
+  request: NextRequest,
+  auth: AuthContext
+) => Promise<NextResponse> | NextResponse;
+
+export function withAuth(handler: AuthHandler) {
+  return async (request: NextRequest) => {
+    const result = await verifyNextAuth(request, {
+      logtoUrl: process.env.LOGTO_URL!,
+      audience: process.env.LOGTO_API_RESOURCE!,
+    });
+
+    if (!result.success) {
+      return NextResponse.json(
+        { error: result.error },
+        { status: 401 }
+      );
+    }
+
+    return handler(request, result.auth);
+  };
+}
+
+// Usage in routes
+// app/api/profile/route.ts
+import { withAuth } from '@/lib/auth';
+
+export const GET = withAuth(async (request, auth) => {
+  const user = await db.user.findUnique({
+    where: { id: auth.userId },
+  });
+  
+  return NextResponse.json({ user });
+});
+```
+
+## Server Actions (Experimental)
+
+For Next.js Server Actions, extract the token from cookies:
+
+```typescript
+'use server'
+
+import { cookies } from 'next/headers';
+import { verifyAuth } from 'simple-logto/backend';
+
+export async function updateProfile(formData: FormData) {
+  const cookieStore = cookies();
+  const token = cookieStore.get('logto_authtoken')?.value;
+
+  if (!token) {
+    throw new Error('Unauthorized');
+  }
+
+  const auth = await verifyAuth(token, {
+    logtoUrl: process.env.LOGTO_URL!,
+    audience: process.env.LOGTO_API_RESOURCE!,
+  });
+
+  // Update user profile
+  await db.user.update({
+    where: { id: auth.userId },
+    data: {
+      name: formData.get('name'),
+    },
+  });
+}
+```
+
+<Note>
+For Server Actions, use the generic `verifyAuth` function instead of `verifyNextAuth`. See [Generic Usage](/backend/generic-usage) for details.
+</Note>
+
+## Error Handling
+
+### With allowGuest: false (default)
+
+```typescript
+const result = await verifyNextAuth(request, { ... });
+
+if (!result.success) {
+  // result.error contains the error message
+  // result.auth is undefined
+  return NextResponse.json(
+    { error: result.error },
+    { status: 401 }
+  );
+}
+
+// result.auth is guaranteed to exist and be authenticated
+const userId = result.auth.userId;
+```
+
+### With allowGuest: true
+
+```typescript
+const result = await verifyNextAuth(request, {
+  allowGuest: true,
+  // ... other options
+});
+
+if (result.success) {
+  // Authenticated user
+  const userId = result.auth.userId;
+} else {
+  // Guest user (result.auth contains guest context)
+  if (result.auth?.isGuest) {
+    const guestId = result.auth.guestId;
+  }
+}
+```
+
+## Common Error Messages
+
+<AccordionGroup>
+  <Accordion title="No token found in cookies or Authorization header">
+    No authentication token was provided in the request.
+    
+    **Solution**: Ensure the frontend is setting cookies or sending Authorization header.
+  </Accordion>
+  
+  <Accordion title="Token verification failed: Token has expired">
+    The JWT token's expiration time has passed.
+    
+    **Solution**: Refresh the token on the frontend or prompt user to re-authenticate.
+  </Accordion>
+  
+  <Accordion title="Invalid issuer">
+    Token wasn't issued by your Logto server.
+    
+    **Solution**: Verify `logtoUrl` matches your Logto tenant URL.
+  </Accordion>
+  
+  <Accordion title="Invalid audience">
+    Token's audience claim doesn't match your API resource.
+    
+    **Solution**: Verify `audience` matches the API resource registered in Logto.
+  </Accordion>
+  
+  <Accordion title="Missing required scope">
+    Token doesn't include the required scope.
+    
+    **Solution**: Ensure the scope is requested during frontend authentication.
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<Steps>
+  <Step title="Use Environment Variables">
+    Store Logto configuration in environment variables:
+    
+    ```typescript
+    const result = await verifyNextAuth(request, {
+      logtoUrl: process.env.LOGTO_URL!,
+      audience: process.env.LOGTO_API_RESOURCE!,
+    });
+    ```
+  </Step>
+  
+  <Step title="Create Helper Functions">
+    Wrap `verifyNextAuth` in helper functions for consistent error handling:
+    
+    ```typescript
+    export const withAuth = (handler: AuthHandler) => { ... };
+    ```
+  </Step>
+  
+  <Step title="Return Appropriate Status Codes">
+    - `401 Unauthorized`: Authentication failed or missing
+    - `403 Forbidden`: Authenticated but insufficient permissions
+  </Step>
+  
+  <Step title="Validate Auth Context">
+    Always check `isAuthenticated` when using guest mode:
+    
+    ```typescript
+    if (!result.auth?.isAuthenticated) {
+      return NextResponse.json({ error: 'Login required' }, { status: 401 });
+    }
+    ```
+  </Step>
+</Steps>
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Express Middleware" icon="node-js" href="/backend/express-middleware">
+    Middleware for Express.js applications
+  </Card>
+  <Card title="Generic Usage" icon="code" href="/backend/generic-usage">
+    Flexible verifyAuth for any environment
+  </Card>
+</CardGroup>

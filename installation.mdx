@@ -1,0 +1,116 @@
+---
+title: Installation
+description: Install Simple Logto using your preferred package manager
+---
+
+# Installation
+
+Simple Logto is available as a single npm package that includes both frontend and backend features.
+
+## Install the package
+
+<CodeGroup>
+
+```bash npm
+npm install @ouim/simple-logto
+```
+
+```bash yarn
+yarn add @ouim/simple-logto
+```
+
+```bash pnpm
+pnpm add @ouim/simple-logto
+```
+
+</CodeGroup>
+
+## Peer dependencies
+
+Simple Logto requires the following peer dependencies for frontend features:
+
+- `@logto/react` - ^3.0.0 || ^4.0.0
+- `react` - ^17.0.0 || ^19.0.0
+- `react-dom` - ^17.0.0 || ^19.0.0
+
+These should be installed automatically by your package manager, but if not, install them manually:
+
+<CodeGroup>
+
+```bash npm
+npm install @logto/react react react-dom
+```
+
+```bash yarn
+yarn add @logto/react react react-dom
+```
+
+```bash pnpm
+pnpm add @logto/react react react-dom
+```
+
+</CodeGroup>
+
+<Note>
+  Backend features work independently and don't require React dependencies.
+</Note>
+
+## Package exports
+
+Simple Logto provides three main exports:
+
+### Main entry (frontend)
+
+```typescript
+import { AuthProvider, useAuth, UserCenter, CallbackPage } from '@ouim/simple-logto'
+```
+
+Includes all frontend components and hooks for React applications.
+
+### Backend entry
+
+```typescript
+import { verifyAuth, createExpressAuthMiddleware, verifyNextAuth } from '@ouim/simple-logto/backend'
+```
+
+Includes JWT verification, Express middleware, and Next.js helpers.
+
+### Bundler config entry
+
+```typescript
+import { viteConfig, webpackConfig, nextjsConfig } from '@ouim/simple-logto/bundler-config'
+```
+
+Pre-configured bundler settings for Vite, Webpack, and Next.js.
+
+<Tip>
+  When editing build-time scripts, import from `@ouim/simple-logto/bundler-config` to avoid executing the main library bundle.
+</Tip>
+
+## TypeScript support
+
+Simple Logto is written in TypeScript and provides comprehensive type definitions out of the box.
+
+```typescript
+import type {
+  LogtoUser,
+  AuthOptions,
+  AuthMiddleware,
+  CallbackPageProps,
+  NavigationOptions,
+  AdditionalPage
+} from '@ouim/simple-logto'
+
+// Backend types
+import type {
+  AuthContext,
+  AuthPayload,
+  VerifyAuthOptions
+} from '@ouim/simple-logto/backend'
+```
+
+## Next steps
+
+<Card title="Quick start" icon="rocket" href="/quickstart">
+  Get up and running with authentication in minutes
+</Card>

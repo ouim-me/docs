@@ -1,0 +1,373 @@
+---
+title: 'UserCenter'
+description: 'Pre-built dropdown user menu component with sign-in/sign-out functionality'
+icon: 'user-circle'
+---
+
+## Overview
+
+The `UserCenter` component is a ready-to-use dropdown menu that displays user information and provides authentication controls. It automatically adapts based on authentication state, showing either a sign-in button or user profile menu.
+
+## Installation
+
+```bash
+npm install simple-logto
+```
+
+## Basic Usage
+
+```tsx
+import { UserCenter } from '@ouim/simple-logto'
+
+function Header() {
+  return (
+    <header>
+      <nav>
+        {/* Your navigation items */}
+        <UserCenter />
+      </nav>
+    </header>
+  )
+}
+```
+
+## Props
+
+<ParamField path="className" type="string">
+  Additional CSS classes to apply to the avatar element.
+  
+  ```tsx
+  <UserCenter className="border-2 border-blue-500" />
+  ```
+</ParamField>
+
+<ParamField path="globalSignOut" type="boolean" default="true">
+  Whether to perform a global sign-out (logs out from entire Logto ecosystem) or local-only sign-out.
+  
+  ```tsx
+  <UserCenter globalSignOut={false} />
+  ```
+</ParamField>
+
+<ParamField path="signoutCallbackUrl" type="string">
+  URL to redirect to after sign-out. Defaults to current page.
+  
+  ```tsx
+  <UserCenter signoutCallbackUrl="/" />
+  ```
+</ParamField>
+
+<ParamField path="themeClassnames" type="string" default="dark:bg-[#171717] dark:text-slate-200 bg-white text-slate-900">
+  Custom theme classes for the dropdown menu styling.
+  
+  ```tsx
+  <UserCenter themeClassnames="bg-gray-800 text-white" />
+  ```
+</ParamField>
+
+<ParamField path="additionalPages" type="AdditionalPage[]" default="[]">
+  Additional menu items to show in the dropdown before the sign-out button.
+  
+  <Expandable title="AdditionalPage type">
+    ```typescript
+    interface AdditionalPage {
+      link: string      // URL to navigate to
+      text: string      // Display text for the menu item
+      icon?: React.ReactNode  // Optional icon component
+    }
+    ```
+  </Expandable>
+  
+  ```tsx
+  import { Settings, CreditCard } from 'lucide-react'
+  
+  <UserCenter
+    additionalPages={[
+      {
+        link: '/settings',
+        text: 'Settings',
+        icon: <Settings />
+      },
+      {
+        link: '/billing',
+        text: 'Billing',
+        icon: <CreditCard />
+      }
+    ]}
+  />
+  ```
+</ParamField>
+
+## States
+
+### Loading State
+
+While authentication state is loading, displays a pulsing skeleton:
+
+```tsx
+<div className="h-8 w-8 rounded-full bg-slate-100 animate-pulse" />
+```
+
+### Authenticated State
+
+When a user is signed in, shows:
+- User avatar (if available) or initials
+- Dropdown menu with:
+  - User name and email
+  - Additional custom pages (if configured)
+  - Sign out button
+
+### Unauthenticated State
+
+When no user is signed in, shows:
+- Generic user icon
+- Dropdown menu with sign-in button
+
+## Examples
+
+### Basic Implementation
+
+```tsx
+import { UserCenter } from '@ouim/simple-logto'
+
+export default function Header() {
+  return (
+    <header className="flex items-center justify-between p-4">
+      <h1>My App</h1>
+      <UserCenter />
+    </header>
+  )
+}
+```
+
+### With Custom Pages
+
+```tsx
+import { UserCenter } from '@ouim/simple-logto'
+import { Settings, User, CreditCard } from 'lucide-react'
+
+export default function Navigation() {
+  return (
+    <nav className="flex items-center gap-4">
+      <UserCenter
+        additionalPages={[
+          {
+            link: '/profile',
+            text: 'Profile',
+            icon: <User className="h-4 w-4" />
+          },
+          {
+            link: '/settings',
+            text: 'Settings',
+            icon: <Settings className="h-4 w-4" />
+          },
+          {
+            link: '/billing',
+            text: 'Billing',
+            icon: <CreditCard className="h-4 w-4" />
+          }
+        ]}
+      />
+    </nav>
+  )
+}
+```
+
+### Custom Styling
+
+```tsx
+import { UserCenter } from '@ouim/simple-logto'
+
+export default function ThemedHeader() {
+  return (
+    <header className="bg-slate-900">
+      <UserCenter
+        className="ring-2 ring-blue-500"
+        themeClassnames="bg-slate-800 text-white border-slate-700"
+      />
+    </header>
+  )
+}
+```
+
+### Local Sign-Out Only
+
+```tsx
+import { UserCenter } from '@ouim/simple-logto'
+
+export default function Header() {
+  return (
+    <header>
+      <UserCenter
+        globalSignOut={false}
+        signoutCallbackUrl="/login"
+      />
+    </header>
+  )
+}
+```
+
+## User Data Display
+
+The component automatically displays:
+
+- **User Avatar**: If `user.avatar` exists, shows the avatar image
+- **User Initials**: If no avatar, generates initials from `user.name`
+- **User Name**: Displays as the main label in the dropdown
+- **User Email**: Shows below the name in a smaller, muted text
+
+```typescript
+// User object structure
+interface LogtoUser {
+  id: string
+  name?: string
+  email?: string
+  avatar?: string
+  [key: string]: any
+}
+```
+
+## Behavior
+
+### Sign-In Flow
+
+1. User clicks on the guest avatar
+2. Dropdown shows "Sign in to your account"
+3. Click "Sign in" button
+4. Triggers `signIn()` from `useAuth` hook
+5. Redirects to Logto authentication
+
+### Sign-Out Flow
+
+1. User clicks "Sign out" button
+2. Calls `signOut({ callbackUrl, global })` from `useAuth` hook
+3. If `globalSignOut={true}`: Logs out from entire Logto ecosystem
+4. If `globalSignOut={false}`: Only clears local session
+5. Redirects to `signoutCallbackUrl` or current page
+
+## Customization
+
+### Custom Icons
+
+You can use any icon library with `additionalPages`:
+
+```tsx
+import { UserCenter } from '@ouim/simple-logto'
+import { IoSettingsOutline, IoCreditCardOutline } from 'react-icons/io5'
+
+<UserCenter
+  additionalPages={[
+    {
+      link: '/settings',
+      text: 'Settings',
+      icon: <IoSettingsOutline />
+    },
+    {
+      link: '/billing',
+      text: 'Billing',
+      icon: <IoCreditCardOutline />
+    }
+  ]}
+/>
+```
+
+### Dark Mode Support
+
+The default theme classes support dark mode:
+
+```tsx
+// Default theme
+themeClassnames="dark:bg-[#171717] dark:text-slate-200 bg-white text-slate-900"
+```
+
+Customize for your design system:
+
+```tsx
+<UserCenter
+  themeClassnames="
+    dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700
+    bg-white text-gray-900 border-gray-200
+  "
+/>
+```
+
+## SSR Considerations
+
+<Info>
+The component includes built-in SSR handling to prevent hydration mismatches. It waits for client-side mounting before rendering user-specific content.
+</Info>
+
+```tsx
+// Internal handling
+const [hasMounted, setHasMounted] = useState(false)
+
+useEffect(() => {
+  setHasMounted(true)
+}, [])
+
+if (!hasMounted || isLoadingUser) {
+  return <LoadingSkeleton />
+}
+```
+
+## Dependencies
+
+The component requires these shadcn/ui components:
+- `Avatar`, `AvatarFallback`, `AvatarImage`
+- `DropdownMenu` family
+- `Button`
+
+Icons from `lucide-react`:
+- `User`
+- `LogOut`
+- `UserCircle`
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Always wrap with AuthProvider">
+    Ensure `UserCenter` is used within an `AuthProvider` to access authentication context.
+  </Accordion>
+  
+  <Accordion title="Configure sign-out redirect">
+    Set `signoutCallbackUrl` to control where users land after signing out.
+  </Accordion>
+  
+  <Accordion title="Use global sign-out for security">
+    Keep `globalSignOut={true}` (default) for better security, clearing all sessions across devices.
+  </Accordion>
+  
+  <Accordion title="Add relevant pages">
+    Use `additionalPages` to provide quick access to user-related pages like settings, profile, and billing.
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+<Warning>
+If the component doesn't show user information after sign-in, ensure the `AuthProvider` is properly configured and wrapping your app.
+</Warning>
+
+<Warning>
+For popup sign-in, make sure your `/signin` page properly handles the `?popup=true` query parameter.
+</Warning>
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="AuthProvider" icon="shield-check" href="/frontend/auth-provider">
+    Main authentication provider
+  </Card>
+  
+  <Card title="useAuth Hook" icon="hook" href="/frontend/use-auth">
+    Access authentication in any component
+  </Card>
+  
+  <Card title="CallbackPage" icon="arrow-right-to-bracket" href="/frontend/callback-page">
+    Handle authentication callbacks
+  </Card>
+  
+  <Card title="Route Protection" icon="lock" href="/frontend/route-protection">
+    Protect routes from unauthorized access
+  </Card>
+</CardGroup>
