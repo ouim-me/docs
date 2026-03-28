@@ -1,0 +1,313 @@
+---
+title: "Adding tools"
+description: "Add custom tools to Reacher — each tool is a self-contained file with a name, description, schema, and handler."
+---
+
+Every tool in Reacher is a single file in `src/tools/`. There is no framework to configure, no plugin system to learn. You create a file, register it in one place, and it appears in Claude's tool list.
+
+This guide walks through the complete pattern: the file structure, handler signatures, registration, audit logging, and how to test your new tool.
+
+## The tool file pattern
+
+Every tool exports four things:
+
+| Export | Type | Purpose |
+| --- | --- | --- |
+| `name` | `string` | Tool identifier Claude uses when calling it |
+| `description` | `string` | Natural language description Claude uses to decide when to invoke it |
+| `schema` | Zod shape object | Parameter definitions — descriptions become Claude's parameter docs |
+| `handler` | `async function` | The implementation |
+
+Here's the minimal shape, taken directly from the codebase:
+
+```javascript src/tools/gist_kb.js
+export const name = 'gist_kb'
+
+export const description =
+  'Manage a private personal knowledge base backed by GitHub Gists. ' +
+  'All entries are namespaced with the cc-- filename prefix automatically. ' +
+  'Supports list, get, create, update, and delete operations.'
+
+export const schema = {
+  action: z.enum(['list', 'get', 'create', 'update', 'delete']),
+  id: z.string().optional().describe('Gist ID - required for get, update, delete'),
+  title: z.string().optional().describe('Filename without prefix - tool adds cc-- automatically'),
+  content: z.string().optional().describe('File content - required for create and update'),
+  description: z.string().optional().describe('Gist description'),
+}
+
+export async function handler(args, env) {
+  const token = env.GITHUB_TOKEN
+  // ...
+}
+```
+
+<Tip>
+Put `.describe()` on every Zod field. These strings are what Claude reads when it decides how to fill in parameters — they are your tool's inline documentation. A field without a description leaves Claude guessing.
+</Tip>
+
+## Handler signature options
+
+Different tools receive different parameters depending on what they need. The server passes only what's required — this limits each tool's access to credentials it doesn't use.
+
+| Signature | Used by | When to use |
+| --- | --- | --- |
+| `handler(args)` | `ssh_exec` | No environment access needed |
+| `handler(args, apiKey)` | `tailscale_status` | Needs one specific API key |
+| `handler(args, allowedDomains, env)` | `fetch_external`, `github_search` | Needs domain allowlist + env tokens |
+| `handler(args, env)` | `gist_kb`, `browser` | Needs full environment object |
+
+Choose the most restrictive signature that covers your tool's actual needs.
+
+## Step-by-step: creating a new tool
+
+This example builds a `disk_usage` tool that checks free disk space on a remote host. It's new — not already in the codebase — and demonstrates the full pattern cleanly.
+
+<Steps>
+
+<Step title="Create the tool file">
+
+Create `src/tools/disk_usage.js`:
+
+<CodeGroup>
+
+```javascript src/tools/disk_usage.js
+/**
+ * Disk Usage tool
+ * Returns disk space summary for one or more paths on a remote host via SSH
+ */
+
+import { z } from 'zod'
+import { spawn } from 'child_process'
+import { auditLog } from '../lib/audit.js'
+
+export const name = 'disk_usage'
+
+export const description =
+  'Check disk space usage on a remote Tailscale device. ' +
+  'Returns human-readable output for one or more paths. ' +
+  'Use this before running operations that write large files.'
+
+export const schema = {
+  hostname: z
+    .string()
+    .describe('Tailscale hostname of the target device (e.g. "myserver")'),
+  paths: z
+    .array(z.string())
+    .optional()
+    .default(['/'])
+    .describe('Filesystem paths to check — defaults to root partition'),
+  user: z
+    .string()
+    .optional()
+    .default('ubuntu')
+    .describe('SSH user to connect as (default: ubuntu)'),
+}
+
+/**
+ * @param {{ hostname: string, paths: string[], user: string }} args
+ */
+export async function handler({ hostname, paths = ['/'], user = 'ubuntu' }) {
+  const pathList = paths.join(' ')
+  const command = `df -h ${pathList}`
+
+  return new Promise((resolve) => {
+    const sshArgs = [
+      '-o', 'StrictHostKeyChecking=no',
+      '-o', 'IdentitiesOnly=yes',
+      '-i', '/root/.ssh/reacher-key',
+      `${user}@${hostname}`,
+      command,
+    ]
+
+    let stdout = ''
+    let stderr = ''
+
+    const proc = spawn('/usr/bin/ssh', sshArgs, { timeout: 15_000 })
+
+    proc.stdout.on('data', (data) => { stdout += data.toString() })
+    proc.stderr.on('data', (data) => { stderr += data.toString() })
+
+    proc.on('close', (code) => {
+      resolve({
+        success: code === 0,
+        hostname,
+        user,
+        paths,
+        stdout: stdout.trim(),
+        stderr: stderr.trim(),
+        exitCode: code ?? 1,
+      })
+    })
+
+    proc.on('error', (error) => {
+      resolve({
+        success: false,
+        hostname,
+        user,
+        paths,
+        error: error.message,
+        exitCode: 1,
+      })
+    })
+  })
+}
+```
+
+</CodeGroup>
+
+The file is entirely self-contained. It imports only what it needs (`z` from Zod, `spawn` from Node's `child_process`), defines its own schema, and handles its own errors.
+
+</Step>
+
+<Step title="Register the tool in mcp-server.js">
+
+Open `src/mcp-server.js` and add two things: the import at the top, and a `server.tool(...)` call in the body.
+
+<CodeGroup>
+
+```javascript src/mcp-server.js (import)
+// Add this line with the other imports at the top of the file
+import * as diskUsage from './tools/disk_usage.js'
+```
+
+```javascript src/mcp-server.js (registration)
+// Add this block inside createMCPServer(), following the same pattern
+// -------------------------------------------------------------------------
+// disk_usage - no env vars needed, uses SSH key from filesystem
+// -------------------------------------------------------------------------
+server.tool(diskUsage.name, diskUsage.description, diskUsage.schema, async args => {
+  const result = await diskUsage.handler(args)
+  await auditLog(diskUsage.name, args, result)
+  return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] }
+})
+```
+
+</CodeGroup>
+
+The four arguments to `server.tool()` are always: `name`, `description`, `schema`, and an async wrapper that calls the handler and passes the result to `auditLog`.
+
+</Step>
+
+<Step title="Add audit logging">
+
+Every tool registration in `mcp-server.js` follows this wrapper pattern:
+
+```javascript src/mcp-server.js
+server.tool(myTool.name, myTool.description, myTool.schema, async args => {
+  const result = await myTool.handler(args)
+  await auditLog(myTool.name, args, result)
+  return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] }
+})
+```
+
+`auditLog` writes to `reacher-audit.log` with the tool name, timestamp, arguments, and result. Sensitive keys (authorization headers, tokens) are stripped automatically before writing. You do not need to redact values yourself — just always call `auditLog` in the wrapper, never inside the tool handler.
+
+</Step>
+
+<Step title="Restart the server">
+
+<Tabs>
+  <Tab title="Docker">
+    ```bash
+    docker restart reacher
+    ```
+  </Tab>
+  <Tab title="Docker Compose">
+    ```bash
+    docker compose restart
+    ```
+  </Tab>
+  <Tab title="Bare Node (dev)">
+    ```bash
+    npm run dev
+    ```
+    If you're running with `--watch` (`npm run dev`), the server restarts automatically on file changes.
+  </Tab>
+</Tabs>
+
+</Step>
+
+<Step title="Verify with tools/list">
+
+Send a `tools/list` request to confirm your tool appears:
+
+```bash
+curl -s -X POST http://localhost:3000/mcp?token=YOUR_MCP_SECRET \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc": "2.0", "method": "tools/list", "id": 1}' \
+  | jq '.result.tools[] | select(.name == "disk_usage")'
+```
+
+You should see your tool's name, description, and the full parameter schema in the response.
+
+</Step>
+
+<Step title="Test in Claude">
+
+Start a new Claude conversation and ask something that naturally invokes your tool:
+
+> "How much disk space is left on homelab?"
+
+Claude will call `disk_usage` with `hostname: "homelab"` and return the result. If it doesn't pick up the tool, check that your `description` clearly states the tool's purpose and when to use it — Claude reads that string to decide whether to invoke it.
+
+</Step>
+
+</Steps>
+
+## Zod schema reference
+
+The `schema` export is a plain object whose values are Zod validators. The MCP SDK converts it to a JSON Schema for Claude automatically.
+
+```javascript
+export const schema = {
+  // Required string
+  hostname: z.string().describe('Tailscale hostname of the target device'),
+
+  // Optional string with default
+  user: z.string().optional().default('ubuntu').describe('SSH user (default: ubuntu)'),
+
+  // Enum
+  format: z.enum(['json', 'text']).optional().default('json')
+    .describe('Output format — json returns parsed object, text returns raw string'),
+
+  // Optional array
+  paths: z.array(z.string()).optional().default(['/'])
+    .describe('Paths to check — defaults to root partition'),
+
+  // Optional object (for POST bodies, etc.)
+  body: z.record(z.any()).optional().describe('Request body for POST requests'),
+}
+```
+
+<Tip>
+Write descriptions from Claude's perspective. `"SSH user (default: ubuntu)"` tells Claude what the value is and what to assume when the user doesn't specify. `"string"` tells Claude nothing.
+</Tip>
+
+## Accessing environment variables
+
+If your tool needs API keys or config values from `.env`, accept `env` as a second parameter and read from it:
+
+```javascript
+export async function handler(args, env) {
+  const apiKey = env.MY_SERVICE_API_KEY
+  if (!apiKey) throw new Error('MY_SERVICE_API_KEY is not set')
+  // ...
+}
+```
+
+Then in `mcp-server.js`, pass `env` when calling the handler:
+
+```javascript
+server.tool(myTool.name, myTool.description, myTool.schema, async args => {
+  const result = await myTool.handler(args, env)
+  await auditLog(myTool.name, args, result)
+  return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] }
+})
+```
+
+The `env` object is `process.env` (or a subset of it) passed into `createMCPServer(env)` at startup.
+
+<Note>
+Add any new environment variables to `.env.example` with a comment explaining what they're for. This keeps your setup reproducible.
+</Note>

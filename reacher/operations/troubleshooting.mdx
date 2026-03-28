@@ -1,0 +1,281 @@
+---
+title: "Troubleshooting"
+description: "Diagnose and fix common issues with Reacher's connection, SSH, tools, and browser integration."
+---
+
+Find your symptom below. Each section covers the most common cause and how to resolve it.
+
+---
+
+## Connection issues
+
+<AccordionGroup>
+
+<Accordion title="Claude can't connect to the server">
+
+Claude requires a public HTTPS URL to reach your Reacher server.
+
+1. Confirm the server is running and reachable:
+   ```bash
+   curl "https://mcp.yourdomain.com/health?token=YOUR_MCP_SECRET"
+   ```
+   You should get `{"status":"ok",...}`. If this fails, the problem is network/DNS, not Reacher.
+
+2. Verify your reverse proxy is forwarding to the correct port (default `3000`).
+
+3. Make sure the full URL you gave Claude includes the token:
+   ```
+   https://mcp.yourdomain.com/mcp?token=YOUR_MCP_SECRET
+   ```
+
+4. Check that port `3000` is not blocked by a firewall on your VPS.
+
+</Accordion>
+
+<Accordion title="401 Unauthorized">
+
+The `MCP_SECRET` in the URL does not match the one the server has loaded.
+
+1. Check what secret the server is using:
+   ```bash
+   docker exec reacher printenv MCP_SECRET
+   ```
+
+2. Compare it to the token in the URL you registered in Claude.ai. They must match exactly — including case and any trailing whitespace.
+
+3. If you changed `MCP_SECRET` in `.env`, restart the container:
+   ```bash
+   docker compose restart reacher
+   ```
+
+</Accordion>
+
+<Accordion title="Server not starting">
+
+Check the container logs for the actual error:
+
+```bash
+docker logs reacher
+```
+
+Common causes:
+
+- **Missing required env vars** — `MCP_SECRET`, `TAILSCALE_API_KEY`, and `GITHUB_TOKEN` must all be set. A missing variable causes startup to fail with an explicit error message listing the missing keys.
+- **Port already in use** — another process is bound to port `3000`. Change `PORT` in `.env` or stop the other process.
+- **Malformed `.env`** — quotes around values can cause parsing issues. Values in `.env` do not need quotes.
+
+</Accordion>
+
+</AccordionGroup>
+
+---
+
+## SSH issues
+
+<AccordionGroup>
+
+<Accordion title="SSH not working — connection refused or timeout">
+
+<Steps>
+
+<Step title="Check that the device is online">
+Ask Claude to run `tailscale_status` and confirm the target device shows as `online: true`. An offline device cannot be reached over SSH.
+</Step>
+
+<Step title="Verify Tailscale SSH is enabled on the target">
+Tailscale SSH must be explicitly enabled on each target machine. SSH to the device manually and run:
+```bash
+sudo tailscale up --ssh
+```
+</Step>
+
+<Step title="Test the connection manually">
+From the Reacher server itself, test that SSH works:
+```bash
+docker exec -it reacher ssh user@hostname
+```
+If this fails, the issue is with SSH credentials or Tailscale connectivity, not Reacher's tool layer.
+</Step>
+
+<Step title="Check the SSH key">
+Reacher uses `/root/.ssh/reacher-key`. Verify it exists and is mounted correctly:
+```bash
+docker exec reacher ls -la /root/.ssh/reacher-key
+```
+The key must have `600` permissions. Reacher sets this automatically, but verify if you mounted it manually.
+</Step>
+
+</Steps>
+
+</Accordion>
+
+<Accordion title="Command blocked unexpectedly">
+
+The command matched an entry in `SSH_BLOCKED_COMMANDS`. The response includes `matched_rule` showing which rule triggered.
+
+To see your current blocklist:
+
+```bash
+docker exec reacher printenv SSH_BLOCKED_COMMANDS
+```
+
+If the block is incorrect — for example, a legitimate command contains a blocked substring — you have two options:
+
+1. **Remove the specific entry** from `SSH_BLOCKED_COMMANDS` or `ssh.blocked_commands` in your YAML config, then restart.
+2. **Reword the command** to avoid the substring. Remember that matching is substring-based, so `dd if=...` matches the blocked entry `dd`.
+
+After changing the config, restart the server:
+
+```bash
+docker compose restart reacher
+```
+
+</Accordion>
+
+<Accordion title="Permission denied on a directory path">
+
+`ssh_exec` returned `blocked: true` with `reason: "Path not in allowed directories"`.
+
+This means `SSH_ALLOWED_DIRS` (or `ssh.allowed_dirs`) is set and the command references a path outside the allowed prefixes.
+
+Options:
+
+1. **Add the path** to your `SSH_ALLOWED_DIRS` list:
+   ```bash
+   # .env
+   SSH_ALLOWED_DIRS=/home/deploy,/tmp,/var/log,/new/allowed/path
+   ```
+
+2. **Clear the allowlist** if you no longer want directory restrictions:
+   ```bash
+   SSH_ALLOWED_DIRS=
+   ```
+
+Restart the server after any change.
+
+</Accordion>
+
+</AccordionGroup>
+
+---
+
+## Tool errors
+
+<AccordionGroup>
+
+<Accordion title="fetch_external: domain not allowed">
+
+The target domain is not in `PROXY_ALLOWED_DOMAINS`.
+
+Add it to your `.env`:
+
+```bash
+PROXY_ALLOWED_DOMAINS=api.github.com,api.linear.app,api.newdomain.com
+```
+
+Restart the server. The full hostname must match — `api.github.com` and `github.com` are treated as separate entries.
+
+</Accordion>
+
+<Accordion title="GitHub authentication failed">
+
+The `GITHUB_TOKEN` in your `.env` is either missing, expired, or lacks the required scopes.
+
+1. Verify the token is set:
+   ```bash
+   docker exec reacher printenv GITHUB_TOKEN
+   ```
+
+2. Check that the token has not expired in [GitHub Settings → Tokens](https://github.com/settings/tokens).
+
+3. Confirm the token has the right scopes:
+   - `repo` (or specific repo access) for `github_search` and API calls via `fetch_external`
+   - `gist` for `gist_kb`
+
+4. Generate a new token and update `.env`, then restart the container.
+
+</Accordion>
+
+<Accordion title="gist_kb errors">
+
+`gist_kb` requires `GITHUB_TOKEN` with `gist` scope (read and write). A token with only `repo` scope will fail.
+
+1. Go to [GitHub Settings → Tokens](https://github.com/settings/tokens)
+2. Edit your token and enable the `gist` scope
+3. Save and update `GITHUB_TOKEN` in `.env`
+4. Restart the server
+
+If the token was recently regenerated and you updated `.env`, confirm the container picked up the new value:
+
+```bash
+docker compose restart reacher
+docker exec reacher printenv GITHUB_TOKEN
+```
+
+</Accordion>
+
+</AccordionGroup>
+
+---
+
+## Browser tool issues
+
+<AccordionGroup>
+
+<Accordion title="agent-browser not found">
+
+The `browser` tool depends on the `agent-browser` CLI being installed globally on the server.
+
+```bash
+npm install -g agent-browser
+```
+
+If you're running Reacher in Docker, this must be included in your Docker image or installed in the container. The default `Dockerfile` does not include it — add the install step if you need browser support:
+
+```dockerfile
+RUN npm install -g agent-browser
+```
+
+Rebuild and restart the container after making this change.
+
+</Accordion>
+
+<Accordion title="CDP connection refused">
+
+The browser tool connects to a CDP-compatible browser at `ws://BROWSER_CDP_HOST:BROWSER_CDP_PORT`. Connection refused means no browser is listening on that address.
+
+1. Confirm the browser process is running.
+
+2. Check the default endpoint: `ws://127.0.0.1:9222`.
+
+3. If your browser is on a different host or port, update `.env`:
+   ```bash
+   BROWSER_CDP_HOST=127.0.0.1
+   BROWSER_CDP_PORT=9222
+   ```
+
+4. Restart Reacher after changing the config.
+
+</Accordion>
+
+<Accordion title="Setting up Lightpanda">
+
+[Lightpanda](https://github.com/lightpanda-io/lightpanda) is a lightweight headless browser with CDP support. To use it with Reacher:
+
+1. Download and install Lightpanda on your server following the instructions in its repository.
+
+2. Start Lightpanda with CDP enabled on port `9222`:
+   ```bash
+   lightpanda serve --host 127.0.0.1 --port 9222
+   ```
+
+3. Leave `BROWSER_CDP_HOST` and `BROWSER_CDP_PORT` at their defaults, or set them to match your Lightpanda configuration.
+
+4. Verify the connection:
+   ```bash
+   curl http://127.0.0.1:9222/json/version
+   ```
+
+</Accordion>
+
+</AccordionGroup>

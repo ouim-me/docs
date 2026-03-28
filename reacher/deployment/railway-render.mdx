@@ -1,0 +1,144 @@
+---
+title: "Railway & Render"
+description: "Deploy Reacher on Railway or Render with automatic HTTPS and GitHub-based deployments."
+---
+
+Railway and Render are managed platforms that deploy directly from a GitHub repository. Both handle HTTPS, DNS, and container orchestration automatically — no VPS configuration needed.
+
+<Warning>
+  Both platforms offer free tiers that **spin down idle services** after a period of inactivity. A sleeping server cannot receive requests from Claude.ai. For reliable operation, use a paid plan or deploy to an always-on host (a VPS with Docker or bare Node.js).
+</Warning>
+
+<Tabs>
+  <Tab title="Railway">
+    ## Deploy on Railway
+
+    <Steps>
+      <Step title="Create a new project">
+        Go to [railway.app](https://railway.app) and click **New Project**.
+      </Step>
+
+      <Step title="Connect your GitHub repository">
+        Choose **Deploy from GitHub repo** and select your Reacher repository.
+
+        Railway detects the `Dockerfile` automatically and uses it to build the image.
+      </Step>
+
+      <Step title="Configure the start command">
+        In the service settings under **Deploy**, confirm the start command is:
+
+        ```bash
+        node index.js
+        ```
+
+        If Railway does not detect it automatically, set it explicitly.
+      </Step>
+
+      <Step title="Set environment variables">
+        Navigate to the **Variables** tab of your service and add the following:
+
+        | Variable | Required | Value |
+        | --- | --- | --- |
+        | `MCP_SECRET` | Yes | A random secret (`openssl rand -hex 32`) |
+        | `TAILSCALE_API_KEY` | Yes | Your Tailscale API key |
+        | `GITHUB_TOKEN` | Yes | Your GitHub personal access token |
+        | `PROXY_ALLOWED_DOMAINS` | Yes | Comma-separated list, e.g. `api.github.com` |
+        | `PORT` | No | Railway injects `PORT` automatically; you can omit this |
+
+        Add any additional variables from `.env.example` that apply to your setup.
+      </Step>
+
+      <Step title="Deploy">
+        Railway builds and deploys automatically after you save the variables. Watch the build logs from the **Deployments** tab.
+      </Step>
+
+      <Step title="Get your public URL">
+        Once deployed, go to **Settings** > **Networking** and click **Generate Domain**. Railway assigns a public HTTPS URL.
+
+        Use this to connect Claude.ai:
+
+        ```
+        https://your-app.up.railway.app/mcp?token=YOUR_MCP_SECRET
+        ```
+      </Step>
+
+      <Step title="Connect to Claude.ai">
+        Go to **Claude.ai** > **Settings** > **Integrations** > **Add custom connector** and paste the URL from the previous step.
+      </Step>
+    </Steps>
+
+    ### Auto-deploys
+
+    Railway redeploys automatically on every push to your connected branch. No manual trigger needed.
+  </Tab>
+
+  <Tab title="Render">
+    ## Deploy on Render
+
+    <Steps>
+      <Step title="Create a new Web Service">
+        Go to [render.com](https://render.com), click **New**, and select **Web Service**.
+      </Step>
+
+      <Step title="Connect your GitHub repository">
+        Authorize Render to access your GitHub account if prompted, then select your Reacher repository and branch.
+      </Step>
+
+      <Step title="Configure the service">
+        Set the following in the service configuration:
+
+        - **Runtime**: `Node`
+        - **Root Directory**: leave blank (or `.` if your repo root contains `index.js`)
+        - **Build Command**: `npm install`
+        - **Start Command**: `node index.js`
+      </Step>
+
+      <Step title="Set environment variables">
+        Scroll to the **Environment Variables** section and add:
+
+        | Variable | Required | Value |
+        | --- | --- | --- |
+        | `MCP_SECRET` | Yes | A random secret (`openssl rand -hex 32`) |
+        | `TAILSCALE_API_KEY` | Yes | Your Tailscale API key |
+        | `GITHUB_TOKEN` | Yes | Your GitHub personal access token |
+        | `PROXY_ALLOWED_DOMAINS` | Yes | Comma-separated list, e.g. `api.github.com` |
+
+        Add any additional variables from `.env.example` that apply to your setup.
+
+        <Note>
+          Render injects `PORT` automatically. Do not set it manually — Render assigns the port and expects your app to listen on `process.env.PORT`.
+        </Note>
+      </Step>
+
+      <Step title="Deploy">
+        Click **Create Web Service**. Render builds from your repository and starts the container. Monitor progress in the **Logs** tab.
+      </Step>
+
+      <Step title="Get your public URL">
+        Render assigns a public HTTPS URL in the format `https://your-app.onrender.com`. It is shown at the top of the service dashboard.
+
+        Use this to connect Claude.ai:
+
+        ```
+        https://your-app.onrender.com/mcp?token=YOUR_MCP_SECRET
+        ```
+      </Step>
+
+      <Step title="Connect to Claude.ai">
+        Go to **Claude.ai** > **Settings** > **Integrations** > **Add custom connector** and paste the URL from the previous step.
+      </Step>
+    </Steps>
+
+    ### Auto-deploys
+
+    Render redeploys automatically on every push to your connected branch. This can be disabled in the service settings if you prefer manual deploys.
+  </Tab>
+</Tabs>
+
+## Health check path
+
+For both platforms, set the health check path to `/health`. Note that this endpoint requires the `MCP_SECRET` token as a query parameter (`?token=YOUR_SECRET`) — configure your platform's health check accordingly, or use a platform-level TCP check on port 3000 instead.
+
+## Environment variable reference
+
+See [`.env.example`](https://github.com/thezem/reacher/blob/main/.env.example) for the full list of supported variables and descriptions.

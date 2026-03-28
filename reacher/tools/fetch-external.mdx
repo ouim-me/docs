@@ -1,0 +1,136 @@
+---
+title: "fetch_external"
+description: "Authenticated HTTP proxy with per-domain token injection — add any API with one line in your config."
+---
+
+`fetch_external` is Reacher's general-purpose HTTP proxy. It forwards requests to external APIs, automatically injecting the right authentication token based on the target domain. Tokens stay on the server — Claude never sees them.
+
+This is the core insight behind Reacher's design: Claude already knows REST APIs. It doesn't need a dedicated tool for GitHub, Linear, or Notion. It needs a way to call those APIs with your credentials. `fetch_external` is that mechanism.
+
+```
+PROXY_ALLOWED_DOMAINS=api.github.com,api.linear.app,api.notion.com
+```
+
+That's three API integrations. One tool.
+
+## Prerequisites
+
+- The target domain must be listed in `PROXY_ALLOWED_DOMAINS` (comma-separated)
+- For authenticated APIs, add the domain-to-token mapping in `FETCH_EXTERNAL_TOKEN_MAP`
+
+```bash
+# .env
+PROXY_ALLOWED_DOMAINS=api.github.com,api.linear.app
+FETCH_EXTERNAL_TOKEN_MAP={"api.github.com":"GITHUB_TOKEN","api.linear.app":"LINEAR_TOKEN"}
+GITHUB_TOKEN=ghp_xxxxxxxxxxxx
+LINEAR_TOKEN=lin_api_xxxxxxxxxxxx
+```
+
+When a request hits `api.github.com`, the tool looks up `"api.github.com"` in `FETCH_EXTERNAL_TOKEN_MAP`, finds `"GITHUB_TOKEN"`, reads that env var, and injects `Authorization: Bearer ghp_xxx` automatically.
+
+## Parameters
+
+<ParamField path="url" type="string" required>
+  The full URL to fetch. Must be a valid URL including scheme (e.g. `https://api.github.com/user`).
+</ParamField>
+
+<ParamField path="method" type="string">
+  HTTP method. Accepted values: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, `OPTIONS`. Defaults to `GET`.
+</ParamField>
+
+<ParamField path="body" type="object">
+  Request body for `POST`, `PUT`, and `PATCH` requests. Serialized as JSON. `Content-Type: application/json` is added automatically if not already present.
+</ParamField>
+
+<ParamField path="headers" type="object">
+  Additional headers to include in the request. Merged with any injected auth headers. If you specify `Authorization` here it will be overridden by the injected token for the domain.
+</ParamField>
+
+## Return value
+
+<ResponseField name="success" type="boolean">
+  `true` if the HTTP response status was in the 2xx range (`response.ok`).
+</ResponseField>
+
+<ResponseField name="status" type="number">
+  HTTP status code returned by the upstream server.
+</ResponseField>
+
+<ResponseField name="statusText" type="string">
+  HTTP status text (e.g. `"OK"`, `"Not Found"`).
+</ResponseField>
+
+<ResponseField name="headers" type="object">
+  Response headers as a key-value object.
+</ResponseField>
+
+<ResponseField name="body" type="object | string">
+  Parsed response body. JSON responses are returned as a parsed object. All other content types are returned as a string.
+</ResponseField>
+
+<ResponseField name="url" type="string">
+  The URL that was fetched.
+</ResponseField>
+
+## Security
+
+When a request targets a domain not in `PROXY_ALLOWED_DOMAINS`, the tool returns immediately without making any network request:
+
+```json
+{
+  "success": false,
+  "error": "Domain not allowed",
+  "url": "https://evil.example.com/steal",
+  "hostname": "evil.example.com"
+}
+```
+
+This prevents the server from being used as a proxy to arbitrary destinations. Only explicitly allowed domains are reachable.
+
+## Usage examples
+
+<CodeGroup>
+```json GitHub — get authenticated user
+{
+  "url": "https://api.github.com/user",
+  "method": "GET"
+}
+```
+
+```json GitHub — list open PRs
+{
+  "url": "https://api.github.com/repos/thezem/reacher/pulls?state=open",
+  "method": "GET"
+}
+```
+
+```json Linear — create an issue
+{
+  "url": "https://api.linear.app/graphql",
+  "method": "POST",
+  "body": {
+    "query": "mutation { issueCreate(input: { title: \"Fix the thing\", teamId: \"TEAM_ID\" }) { success } }"
+  }
+}
+```
+
+```json Notion — query a database
+{
+  "url": "https://api.notion.com/v1/databases/DATABASE_ID/query",
+  "method": "POST",
+  "headers": {
+    "Notion-Version": "2022-06-28"
+  },
+  "body": {
+    "filter": {
+      "property": "Status",
+      "select": { "equals": "In Progress" }
+    }
+  }
+}
+```
+</CodeGroup>
+
+<Tip>
+For GitHub-specific searches (PRs by author, commits by date), use the dedicated `github_search` tool. It returns clean minimal output optimized for that use case.
+</Tip>

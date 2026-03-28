@@ -1,0 +1,149 @@
+---
+title: "browser"
+description: "CDP-based headless browser control via the agent-browser CLI — navigate, click, fill, and snapshot."
+---
+
+`browser` controls a headless browser by running `agent-browser` CLI commands. It connects to any CDP-compatible browser (such as [Lightpanda](https://github.com/lightpanda-io/browser)) over the Chrome DevTools Protocol WebSocket interface.
+
+`agent-browser` maintains its own daemon session between calls, so a `navigate` in one call and a `click` in the next operate on the same browser state.
+
+## Prerequisites
+
+<Steps>
+  <Step title="Install agent-browser">
+    Install the `agent-browser` CLI globally on the server where Reacher is deployed:
+    ```bash
+    npm install -g agent-browser
+    ```
+  </Step>
+  <Step title="Start a CDP-compatible browser">
+    Run a CDP-compatible browser and expose its WebSocket debugger. Lightpanda is a lightweight option:
+    ```bash
+    lightpanda serve --host 127.0.0.1 --port 9222
+    ```
+    Any Chromium-based browser launched with `--remote-debugging-port=9222` also works.
+  </Step>
+  <Step title="Configure Reacher (optional)">
+    By default Reacher connects to `ws://127.0.0.1:9222`. Override with environment variables if your browser is on a different host or port:
+    ```bash
+    BROWSER_CDP_HOST=127.0.0.1
+    BROWSER_CDP_PORT=9222
+    ```
+  </Step>
+</Steps>
+
+## Parameters
+
+<ParamField path="command" type="string" required>
+  An `agent-browser` command string. The tool parses this into arguments respecting quoted strings before passing to the CLI.
+
+  Supported commands:
+  - `open <url>` — navigate to a URL
+  - `snapshot -i` — take an accessibility/DOM snapshot of the current page
+  - `click @<elementId>` — click an element by its agent-browser element ID
+  - `fill @<elementId> <value>` — fill a form field with a value
+  - `close` — close the current page/session
+
+  Example values: `"open https://example.com"`, `"snapshot -i"`, `"click @e2"`, `"fill @e3 hello world"`
+</ParamField>
+
+## Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `BROWSER_CDP_HOST` | `127.0.0.1` | Host of the CDP-compatible browser |
+| `BROWSER_CDP_PORT` | `9222` | WebSocket debugger port |
+
+The tool connects to `ws://<BROWSER_CDP_HOST>:<BROWSER_CDP_PORT>` and passes it to `agent-browser` via the `--cdp` flag.
+
+## Return value
+
+<ResponseField name="success" type="boolean">
+  `true` if `agent-browser` exited with code 0.
+</ResponseField>
+
+<ResponseField name="command" type="string">
+  The command string that was executed.
+</ResponseField>
+
+<ResponseField name="stdout" type="string">
+  Trimmed standard output from `agent-browser`. For `snapshot`, this contains the page's accessibility tree or DOM representation.
+</ResponseField>
+
+<ResponseField name="stderr" type="string">
+  Trimmed standard error output. If `agent-browser` is not installed, this will contain a helpful installation message.
+</ResponseField>
+
+<ResponseField name="exitCode" type="number">
+  Process exit code from `agent-browser`. `0` means success.
+</ResponseField>
+
+## Usage examples
+
+<CodeGroup>
+```json Navigate to a page
+{
+  "command": "open https://example.com"
+}
+```
+
+```json Snapshot the current page
+{
+  "command": "snapshot -i"
+}
+```
+
+```json Click an element
+{
+  "command": "click @e5"
+}
+```
+
+```json Fill a form field
+{
+  "command": "fill @e3 user@example.com"
+}
+```
+
+```json Close the browser session
+{
+  "command": "close"
+}
+```
+</CodeGroup>
+
+## Common use cases
+
+**Scrape a page**
+
+Navigate to a URL, take a snapshot to see the page structure, then extract the relevant content from `stdout`.
+
+```
+1. open https://status.myservice.com
+2. snapshot -i
+```
+
+**Fill and submit a form**
+
+Navigate to a page, take a snapshot to discover element IDs, then fill and submit the form.
+
+```
+1. open https://app.example.com/login
+2. snapshot -i          ← read element IDs from output
+3. fill @e2 myusername
+4. fill @e3 mypassword
+5. click @e4            ← submit button
+6. snapshot -i          ← verify logged-in state
+```
+
+**Take a visual snapshot for monitoring**
+
+Navigate to a dashboard or status page and snapshot it to check current state as part of an automated check.
+
+**Automate repetitive web tasks**
+
+Sequence multiple commands across calls to automate multi-step flows — the `agent-browser` daemon preserves session state between tool calls.
+
+<Warning>
+The `agent-browser` binary must be installed on the server where Reacher runs, not on the machine Claude is accessed from. If it's missing, `stderr` will contain: `agent-browser binary not found. Run npm install -g agent-browser on the server where Reacher is deployed.`
+</Warning>

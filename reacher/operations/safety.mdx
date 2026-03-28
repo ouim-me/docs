@@ -1,0 +1,148 @@
+---
+title: "Safety mechanisms"
+description: "Configure SSH guardrails, directory restrictions, and domain whitelisting to define Reacher's access boundaries."
+---
+
+<Warning>
+Reacher gives Claude real access to your infrastructure — that's the point. The mechanisms described here let you define the boundaries. You own the risk tolerance.
+</Warning>
+
+Safety in Reacher is opt-in and additive. A default installation with no safety configuration is fully functional but fully open. Start with the defaults below and tighten them to match your environment.
+
+---
+
+## SSH command blocklist
+
+The blocklist prevents `ssh_exec` from running commands that match any entry in the list. Matching happens **before** the SSH connection is made — a blocked command never leaves the server.
+
+### How it works
+
+Matching is **substring-based** and **case-insensitive**. If `rm -rf` is in the blocklist, all of the following are blocked:
+
+```
+rm -rf /tmp/cache
+RM -RF /
+sudo rm -rf /home/user
+```
+
+The tool returns immediately with `success: false` and `blocked: true`:
+
+```json
+{
+  "success": false,
+  "blocked": true,
+  "reason": "Command blocked by reacher config",
+  "matched_rule": "rm -rf",
+  "hostname": "myserver",
+  "user": "deploy",
+  "command": "rm -rf /tmp/old"
+}
+```
+
+### Configuration
+
+<CodeGroup>
+
+```yaml reacher.config.yaml
+ssh:
+  blocked_commands:
+    - "rm -rf"
+    - "shutdown"
+    - "reboot"
+    - "mkfs"
+    - "dd"
+    - "format"
+    - ":(){ :|:& };:" # fork bomb
+```
+
+```bash .env
+SSH_BLOCKED_COMMANDS=rm -rf /,shutdown,reboot,mkfs,dd,format
+```
+
+</CodeGroup>
+
+<Tip>
+The `.env.example` ships with `rm -rf /,shutdown,reboot,mkfs,dd,format` as sensible starting defaults. Extend this list based on the commands your environment should never run.
+</Tip>
+
+---
+
+## Directory allowlist
+
+The directory allowlist restricts `ssh_exec` to paths under specific prefixes. When the list is non-empty, `ssh_exec` parses path tokens from the command and rejects any that fall outside the allowed set.
+
+### How it works
+
+Matching is **prefix-based**. The tool extracts tokens from the command that start with `/`, `~`, or `./`, then checks each one:
+
+```
+Allowed: /home/deploy
+
+✓  /home/deploy/scripts/release.sh
+✓  /home/deploy/logs/app.log
+✗  /home/other/file
+✗  /etc/passwd
+```
+
+An empty `allowed_dirs` list (the default) applies no restriction — all paths are permitted.
+
+### Configuration
+
+<CodeGroup>
+
+```yaml reacher.config.yaml
+ssh:
+  allowed_dirs:
+    - "/home/deploy"
+    - "/tmp"
+    - "/var/log"
+```
+
+```bash .env
+SSH_ALLOWED_DIRS=/home/deploy,/tmp,/var/log
+```
+
+</CodeGroup>
+
+---
+
+## Domain whitelisting for fetch_external
+
+`fetch_external` and `github_search` only proxy requests to domains listed in `PROXY_ALLOWED_DOMAINS`. Requests to any other hostname are rejected before any network call is made.
+
+```bash .env
+PROXY_ALLOWED_DOMAINS=api.github.com,api.linear.app,api.notion.com
+```
+
+This prevents the server from being used as an open proxy. Add only the API domains your workflows actually need. See [Domain allowlist](/configuration/domain-allowlist) for the full configuration reference.
+
+---
+
+## Principle of least exposure
+
+Different tools receive different subsets of the environment to minimize what each one can access:
+
+| Tool | What it receives |
+|---|---|
+| `ssh_exec` | No env — operates on config only |
+| `tailscale_status` | Tailscale API key only |
+| `fetch_external`, `github_search` | `allowedDomains` + full env (for token injection) |
+| `gist_kb`, `browser` | Full env object |
+
+This is enforced in handler signatures rather than runtime checks. A tool that doesn't receive `GITHUB_TOKEN` in its arguments cannot use it, regardless of what's in the process environment.
+
+---
+
+## Audit logging
+
+Every tool call is logged to a file with timestamp, tool name, sanitized arguments, and result. Sensitive keys (`token`, `password`, `secret`, `key`) are stripped automatically before writing.
+
+See [Audit log](/operations/audit-log) for the full reference.
+
+---
+
+## Dry-run mode
+
+When `DRY_RUN=true`, `ssh_exec` evaluates safety rules and returns a `would_execute` response without making any SSH connection. Useful for validating your setup or testing a new blocklist configuration.
+
+See [Dry-run mode](/operations/dry-run) for details.

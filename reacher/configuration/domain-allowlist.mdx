@@ -1,0 +1,223 @@
+---
+title: "Domain allowlist"
+description: "How PROXY_ALLOWED_DOMAINS and FETCH_EXTERNAL_TOKEN_MAP control which APIs fetch_external can reach and how auth tokens are injected automatically."
+---
+
+The `fetch_external` tool is Reacher's HTTP proxy for calling external APIs. Two environment variables control its behavior: `PROXY_ALLOWED_DOMAINS` defines which domains Claude is permitted to reach, and `FETCH_EXTERNAL_TOKEN_MAP` tells the server which credential to inject for each domain.
+
+Together they give Claude authenticated access to any REST API without you ever pasting a token into a prompt.
+
+---
+
+## Why domain whitelisting matters
+
+Without a domain restriction, a compromised prompt or an unintended instruction could cause Reacher to proxy requests to arbitrary hosts on the internet — potentially leaking data or triggering unintended side effects on external services.
+
+`PROXY_ALLOWED_DOMAINS` is a strict allowlist. The server parses the hostname from the requested URL and checks it against the list before making any outbound connection. If the domain is not listed, the request is rejected immediately and Claude receives an error — no HTTP call is made.
+
+```
+Domain "api.attacker.com" is not in PROXY_ALLOWED_DOMAINS → rejected
+Domain "api.github.com" is in PROXY_ALLOWED_DOMAINS → proceeds
+```
+
+This means the set of APIs Claude can reach is always explicit and operator-controlled.
+
+---
+
+## How token injection works
+
+`FETCH_EXTERNAL_TOKEN_MAP` is a JSON object that maps domain hostnames to the names of environment variables holding credentials:
+
+```bash
+FETCH_EXTERNAL_TOKEN_MAP={"api.github.com":"GITHUB_TOKEN","api.linear.app":"LINEAR_API_TOKEN"}
+```
+
+When `fetch_external` receives a request for `api.github.com`, it:
+
+1. Confirms the domain is in `PROXY_ALLOWED_DOMAINS`
+2. Looks up `"api.github.com"` in `FETCH_EXTERNAL_TOKEN_MAP` → finds `"GITHUB_TOKEN"`
+3. Reads the value of the `GITHUB_TOKEN` environment variable from the server process
+4. Injects `Authorization: Bearer <token>` into the outbound request headers
+5. Forwards the request and returns the response to Claude
+
+Claude never sees the token value. It only sees the API response.
+
+<Note>
+If a domain is in `PROXY_ALLOWED_DOMAINS` but not in `FETCH_EXTERNAL_TOKEN_MAP`, the request proceeds without injecting any authorization header. This is correct for public APIs that do not require authentication.
+</Note>
+
+---
+
+## JSON format
+
+`FETCH_EXTERNAL_TOKEN_MAP` must be valid JSON. The keys are exact hostnames (not URLs or patterns), and the values are the names of other environment variables — not the token values themselves.
+
+```json
+{
+  "api.github.com": "GITHUB_TOKEN",
+  "api.linear.app": "LINEAR_API_TOKEN",
+  "api.notion.com": "NOTION_TOKEN",
+  "your-instance.atlassian.net": "JIRA_API_TOKEN"
+}
+```
+
+In `.env`, the entire JSON object must be on a single line:
+
+```bash
+FETCH_EXTERNAL_TOKEN_MAP={"api.github.com":"GITHUB_TOKEN","api.linear.app":"LINEAR_API_TOKEN"}
+```
+
+<Warning>
+If the JSON is malformed, `fetch_external` will fail to parse the token map and no tokens will be injected. Check the server logs on startup if you suspect a parsing issue.
+</Warning>
+
+---
+
+## Adding a new API integration
+
+Adding support for a new API is a two-line change to your `.env`:
+
+<Steps>
+
+<Step title="Add the domain to PROXY_ALLOWED_DOMAINS">
+
+```bash
+PROXY_ALLOWED_DOMAINS=api.github.com,api.linear.app,api.notion.com
+```
+
+Append the new hostname to the existing comma-separated list.
+
+</Step>
+
+<Step title="Add the token mapping to FETCH_EXTERNAL_TOKEN_MAP">
+
+```bash
+FETCH_EXTERNAL_TOKEN_MAP={"api.github.com":"GITHUB_TOKEN","api.linear.app":"LINEAR_API_TOKEN","api.notion.com":"NOTION_TOKEN"}
+```
+
+Add the hostname-to-variable mapping. If the API is public and needs no auth, skip this step.
+
+</Step>
+
+<Step title="Add the token value as its own environment variable">
+
+```bash
+NOTION_TOKEN=secret_xxxxxxxxxxxxxxxxxxxx
+```
+
+The name here must match the value you used in `FETCH_EXTERNAL_TOKEN_MAP`.
+
+</Step>
+
+<Step title="Restart the server">
+
+```bash
+docker compose restart reacher
+# or: pm2 restart reacher
+```
+
+Environment variable changes require a server restart to take effect.
+
+</Step>
+
+</Steps>
+
+---
+
+## Real examples
+
+### GitHub
+
+```bash
+GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxx
+PROXY_ALLOWED_DOMAINS=api.github.com
+FETCH_EXTERNAL_TOKEN_MAP={"api.github.com":"GITHUB_TOKEN"}
+```
+
+Once configured, Claude can call any GitHub API endpoint:
+
+```text Example Claude prompt
+List my open pull requests across all repos.
+```
+
+Claude will call `fetch_external` with something like:
+
+```json
+{
+  "url": "https://api.github.com/search/issues?q=is:pr+is:open+author:@me",
+  "method": "GET"
+}
+```
+
+Reacher injects the `Authorization: Bearer ghp_xxx` header automatically and returns the GitHub API response to Claude.
+
+### Linear
+
+```bash
+LINEAR_API_TOKEN=lin_api_xxxxxxxxxxxxxxxxxxxx
+PROXY_ALLOWED_DOMAINS=api.github.com,api.linear.app
+FETCH_EXTERNAL_TOKEN_MAP={"api.github.com":"GITHUB_TOKEN","api.linear.app":"LINEAR_API_TOKEN"}
+```
+
+Linear's API is GraphQL. Claude can POST to `https://api.linear.app/graphql` with the appropriate query body.
+
+### Notion
+
+```bash
+NOTION_TOKEN=secret_xxxxxxxxxxxxxxxxxxxx
+PROXY_ALLOWED_DOMAINS=api.github.com,api.notion.com
+FETCH_EXTERNAL_TOKEN_MAP={"api.github.com":"GITHUB_TOKEN","api.notion.com":"NOTION_TOKEN"}
+```
+
+Notion's REST API uses `Bearer` auth — Reacher's injection pattern matches exactly.
+
+### Jira (Atlassian Cloud)
+
+Jira Cloud hostnames are instance-specific (e.g., `your-org.atlassian.net`). Use your exact subdomain:
+
+```bash
+JIRA_API_TOKEN=your_atlassian_api_token
+PROXY_ALLOWED_DOMAINS=your-org.atlassian.net
+FETCH_EXTERNAL_TOKEN_MAP={"your-org.atlassian.net":"JIRA_API_TOKEN"}
+```
+
+<Note>
+Jira Cloud uses HTTP Basic auth, not Bearer tokens. The standard token injection adds a `Bearer` header. For Jira, you may need to pass credentials differently — check the [Atlassian REST API authentication docs](https://developer.atlassian.com/cloud/jira/platform/basic-auth-for-rest-apis/) and construct the auth header manually if needed.
+</Note>
+
+---
+
+## How the domain check works
+
+The allowlist check in `fetch_external` parses the full URL to extract the hostname, then checks exact membership in the allowed list:
+
+```javascript
+const allowedList = (allowedDomains || '')
+  .split(',')
+  .map(d => d.trim())
+  .filter(d => d)
+
+if (!allowedList.includes(hostname)) {
+  return { success: false, error: 'Domain not allowed', hostname }
+}
+```
+
+This is exact hostname matching — `api.github.com` does not match `github.com` or `gist.github.com`. If you need access to multiple subdomains of the same service, add each one explicitly.
+
+### What happens when a domain is blocked
+
+When Claude calls `fetch_external` for a domain not in the allowlist, the tool returns an error object immediately:
+
+```json
+{
+  "success": false,
+  "error": "Domain not allowed",
+  "hostname": "api.example.com"
+}
+```
+
+No outbound HTTP request is made. Claude sees this error and can tell you that the domain is not configured — it will not retry or find a workaround.
+
+<Tip>
+If Claude reports a "Domain not allowed" error for a call you expected to work, double-check that the hostname in `PROXY_ALLOWED_DOMAINS` exactly matches the hostname in the URL (no trailing slashes, no protocol prefix, no path).
+</Tip>

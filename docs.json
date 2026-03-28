@@ -25,7 +25,35 @@
         "groups": [
           {
             "group": "Get Started",
-            "pages": ["reacher/introduction", "reacher/quickstart"]
+            "pages": ["introduction", "quickstart", "connecting-to-claude"]
+          },
+          {
+            "group": "Configuration",
+            "pages": ["configuration/environment-variables", "configuration/reacher-config", "configuration/domain-allowlist"]
+          },
+          {
+            "group": "Tools",
+            "pages": [
+              "tools/overview",
+              "tools/ssh-exec",
+              "tools/tailscale-status",
+              "tools/fetch-external",
+              "tools/github-search",
+              "tools/gist-kb",
+              "tools/browser"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": ["deployment/docker", "deployment/bare-node", "deployment/easypanel", "deployment/railway-render"]
+          },
+          {
+            "group": "Operations",
+            "pages": ["operations/safety", "operations/audit-log", "operations/dry-run", "operations/troubleshooting"]
+          },
+          {
+            "group": "Extending",
+            "pages": ["extending/adding-tools", "extending/token-injection"]
           }
         ]
       },

@@ -1,0 +1,82 @@
+---
+title: "EasyPanel"
+description: "Deploy Reacher on EasyPanel with automatic builds from GitHub and a managed HTTPS URL."
+---
+
+EasyPanel is a server management panel that connects directly to your GitHub repository and handles image builds, deployments, and HTTPS termination automatically. It runs on your own VPS, so you retain full control of the infrastructure.
+
+## Prerequisites
+
+- An EasyPanel instance running on a VPS ([easypanel.io](https://easypanel.io))
+- Your Reacher fork or clone pushed to a GitHub repository
+- Your credentials ready (see [`.env.example`](https://github.com/thezem/reacher/blob/main/.env.example))
+
+## Deployment
+
+<Steps>
+  <Step title="Create a new project">
+    In the EasyPanel dashboard, click **Create Project** and give it a name (e.g. `reacher`).
+  </Step>
+
+  <Step title="Add a new service">
+    Inside the project, click **Create Service** and choose **App**.
+  </Step>
+
+  <Step title="Connect your GitHub repository">
+    Select **GitHub** as the source. Authorize EasyPanel to access your account if prompted, then choose your Reacher repository and the branch you want to deploy (e.g. `main` or `v0.1.0`).
+
+    EasyPanel will detect the `Dockerfile` automatically and use it to build the image.
+  </Step>
+
+  <Step title="Set the port">
+    In the service settings, set the **App Port** to `3000`. This tells EasyPanel which container port to route traffic to.
+  </Step>
+
+  <Step title="Configure environment variables">
+    Navigate to the **Environment** tab of your service and add each variable:
+
+    | Variable | Required | Value |
+    | --- | --- | --- |
+    | `MCP_SECRET` | Yes | A random secret (`openssl rand -hex 32`) |
+    | `TAILSCALE_API_KEY` | Yes | Your Tailscale API key |
+    | `GITHUB_TOKEN` | Yes | Your GitHub personal access token |
+    | `PROXY_ALLOWED_DOMAINS` | Yes | Comma-separated list, e.g. `api.github.com` |
+    | `PORT` | No | Defaults to `3000` |
+
+    Add any additional variables from `.env.example` that you need.
+  </Step>
+
+  <Step title="Set the health check path">
+    In the service settings, you can set a **Health Check Path**. Because the `/health` endpoint requires the `MCP_SECRET` token as a query parameter, the easiest approach is to skip the HTTP health check and rely on EasyPanel's container restart policy instead.
+  </Step>
+
+  <Step title="Deploy">
+    Click **Deploy**. EasyPanel builds the Docker image from your repository and starts the container.
+
+    You can monitor build and runtime logs from the **Logs** tab of the service.
+  </Step>
+
+  <Step title="Connect to Claude.ai">
+    Once the service is running, EasyPanel assigns it a public HTTPS URL (e.g. `https://reacher.your-easypanel-domain.com`).
+
+    Use this URL to connect Claude.ai:
+
+    ```
+    https://reacher.your-easypanel-domain.com/mcp?token=YOUR_MCP_SECRET
+    ```
+
+    Go to **Claude.ai** > **Settings** > **Integrations** > **Add custom connector** and paste the URL above.
+  </Step>
+</Steps>
+
+## Automatic deploys on push
+
+EasyPanel can rebuild and redeploy your service automatically whenever you push to GitHub. Enable this in the service's **Source** settings by turning on **Auto Deploy**.
+
+<Tip>
+  If you are iterating on the server configuration without changing code, you can trigger a manual redeploy from the EasyPanel dashboard without a git push.
+</Tip>
+
+## Viewing logs
+
+Logs are available in real time from the **Logs** tab of your service in the EasyPanel dashboard. There is no separate CLI step required.

@@ -1,0 +1,232 @@
+---
+title: "Docker"
+description: "Deploy Reacher using Docker or Docker Compose on any VPS or local machine."
+---
+
+Docker is the recommended way to run Reacher in production. It handles dependencies, provides automatic restarts, and isolates the process cleanly.
+
+## Prerequisites
+
+- Docker installed on your host machine
+- `.env` file configured with your credentials (copy from `.env.example`)
+- `reacher.config.yaml` configured (copy from `reacher.config.example.yaml`)
+
+<Tip>
+  Generate a strong `MCP_SECRET` before you start: `openssl rand -hex 32`
+</Tip>
+
+## Docker Compose (recommended)
+
+Docker Compose is the simplest path for most deployments. It builds the image, maps ports, loads your `.env`, and restarts automatically on crash or reboot.
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone --branch v0.1.0 https://github.com/thezem/reacher.git
+    cd reacher
+    ```
+  </Step>
+
+  <Step title="Configure environment and config files">
+    ```bash
+    cp .env.example .env
+    cp reacher.config.example.yaml reacher.config.yaml
+    ```
+
+    Edit both files with your credentials. At minimum, set:
+
+    ```bash
+    MCP_SECRET=<random-string>
+    TAILSCALE_API_KEY=<your-tailscale-api-key>
+    GITHUB_TOKEN=<your-github-token>
+    PROXY_ALLOWED_DOMAINS=api.github.com
+    ```
+  </Step>
+
+  <Step title="Start the service">
+    ```bash
+    docker compose up -d
+    ```
+
+    Docker Compose will build the image and start the container in the background.
+  </Step>
+
+  <Step title="Verify it is running">
+    ```bash
+    docker logs mcp-server
+    curl "http://localhost:3000/health?token=YOUR_MCP_SECRET"
+    ```
+
+    You should see `{"status":"ok",...}` from the health check endpoint.
+  </Step>
+</Steps>
+
+### docker-compose.yml
+
+This is the full Compose file included in the repository:
+
+```yaml docker-compose.yml
+version: '3.8'
+
+services:
+  mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mcp-server
+    ports:
+      - "${PORT:-3000}:${PORT:-3000}"
+    environment:
+      PORT: ${PORT:-3000}
+      TAILSCALE_API_KEY: ${TAILSCALE_API_KEY}
+      # TELEGRAM_BOT_TOKEN and DEFAULT_CHAT_ID are unused leftover vars in the compose file
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      DEFAULT_CHAT_ID: ${DEFAULT_CHAT_ID}
+    env_file:
+      - .env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:' + (process.env.PORT || 3000), (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    volumes:
+      - ./src:/app/src
+      - ./index.js:/app/index.js
+    # Uncomment for local development with auto-reload
+    # command: npm run dev
+```
+
+## Manual docker run
+
+If you prefer to manage the container directly without Compose:
+
+<Steps>
+  <Step title="Build the image">
+    ```bash
+    docker build -t reacher .
+    ```
+  </Step>
+
+  <Step title="Run the container">
+    ```bash
+    docker run -d \
+      -p 3000:3000 \
+      --env-file .env \
+      --restart unless-stopped \
+      --name reacher \
+      reacher
+    ```
+
+    The flags do the following:
+    - `-d` — run in the background (detached)
+    - `-p 3000:3000` — map host port 3000 to container port 3000
+    - `--env-file .env` — inject all variables from your `.env` file
+    - `--restart unless-stopped` — restart automatically on crash or host reboot
+    - `--name reacher` — give the container a stable name for log and management commands
+  </Step>
+</Steps>
+
+## Checking logs
+
+```bash
+docker logs reacher
+docker logs reacher --follow   # stream live output
+```
+
+For Docker Compose deployments, use the service name:
+
+```bash
+docker compose logs -f mcp-server
+```
+
+## Health check
+
+The `/health` endpoint returns the current server status. It requires the same token as the `/mcp` endpoint:
+
+```bash
+curl "http://localhost:3000/health?token=YOUR_MCP_SECRET"
+```
+
+```json
+{
+  "status": "ok",
+  "timestamp": "2026-03-18T12:00:00.000Z",
+  "dry_run": false
+}
+```
+
+Docker runs its own built-in health check every 30 seconds against this endpoint. You can inspect it with:
+
+```bash
+docker inspect --format='{{.State.Health.Status}}' reacher
+```
+
+## Updating to a new version
+
+<Steps>
+  <Step title="Pull the latest code">
+    ```bash
+    git pull
+    ```
+  </Step>
+
+  <Step title="Rebuild and restart">
+    <CodeGroup>
+    ```bash Docker Compose
+    docker compose up -d --build
+    ```
+
+    ```bash Manual docker run
+    docker build -t reacher .
+    docker stop reacher && docker rm reacher
+    docker run -d \
+      -p 3000:3000 \
+      --env-file .env \
+      --restart unless-stopped \
+      --name reacher \
+      reacher
+    ```
+    </CodeGroup>
+  </Step>
+</Steps>
+
+## Dockerfile reference
+
+The included Dockerfile produces a minimal production image:
+
+```dockerfile Dockerfile
+FROM node:22-alpine
+
+# Install openssh-client for ssh_exec tool
+RUN apk add --no-cache openssh-client
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies with production flag
+RUN npm install --omit=dev
+
+# Copy application code
+COPY . .
+
+# Expose port (default 3000, can be overridden)
+EXPOSE ${PORT:-3000}
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:' + (process.env.PORT || 3000), (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"
+
+# Start the server
+CMD ["node", "index.js"]
+```
+
+Key details:
+- **Base image**: `node:22-alpine` — small Alpine-based Node 22 image
+- **`openssh-client`**: required for the `ssh_exec` tool to reach Tailscale devices
+- **`npm install --omit=dev`**: installs only production dependencies to keep the image lean
+- **Built-in health check**: polls the server's HTTP port every 30 seconds

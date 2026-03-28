@@ -1,0 +1,87 @@
+---
+title: "Introduction"
+description: "Your own infrastructure layer for Claude. SSH, APIs, memory — all authenticated, all yours."
+---
+
+## What is Reacher?
+
+Reacher is a self-hosted MCP (Model Context Protocol) server that turns Claude into a personal infrastructure agent. It gives Claude authenticated access to your machines, your APIs, and persistent memory — across every conversation.
+
+You run it on a VPS you own. Claude reaches it over HTTPS. Everything in between — SSH keys, API tokens, Tailscale mesh access — stays on your server.
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get Reacher running in under 10 minutes with Docker or bare Node.
+  </Card>
+  <Card title="Connect to Claude" icon="plug" href="/connecting-to-claude">
+    Link your running server to Claude.ai as a custom connector.
+  </Card>
+  <Card title="Tools reference" icon="wrench" href="/tools/overview">
+    Explore all six tools: ssh_exec, fetch_external, gist_kb, and more.
+  </Card>
+  <Card title="Add your own tools" icon="code" href="/extending/adding-tools">
+    Every tool is a single file. Add your own in minutes.
+  </Card>
+</CardGroup>
+
+---
+
+## The problem with official MCP connectors
+
+Official connectors give you 40 tools when you need 3. They live in someone else's sandbox, they don't know your machines, and they reset when the conversation ends.
+
+Reacher is the alternative. One server you own. One authenticated proxy. Every API you care about is just an allowed domain away — no new connector, no new tool, just a new line in your config.
+
+---
+
+## What Reacher actually is
+
+A trust boundary with tools attached.
+
+The VPS is neutral ground — not your laptop, not Anthropic's servers, yours. When Claude calls `ssh_exec` to reach one of your machines, it goes through a server you control, authenticated with a key you own, over your Tailscale mesh. The whole chain is yours.
+
+### The fetch_external insight
+
+Adding GitHub support to Reacher is not "install the GitHub MCP connector." It's adding `api.github.com` to your allowed domains list. Same tool, same authenticated proxy, new target. Claude already knows REST APIs — it doesn't need a dedicated `github_list_prs` tool. It just needs a way to call the API with your token, without you pasting it into every prompt.
+
+```bash
+PROXY_ALLOWED_DOMAINS=api.github.com,api.linear.app,api.notion.com
+```
+
+That's three integrations. _One tool._
+
+---
+
+## Available tools
+
+| Tool | What it does |
+| --- | --- |
+| `ssh_exec` | Run shell commands on any Tailscale device |
+| `tailscale_status` | List all devices with online/offline status, IPs, OS |
+| `fetch_external` | Proxy HTTP requests with injected auth per domain |
+| `github_search` | Search GitHub for pull requests or commits |
+| `gist_kb` | Read/write a private knowledge base backed by GitHub Gists |
+| `browser` | Control a headless browser via CDP |
+
+---
+
+## Architecture overview
+
+```
+Claude.ai  ──HTTPS──►  Reacher (your VPS)  ──Tailscale SSH──►  your machines
+                              │
+                              ├──► fetch_external ──► api.github.com (with token)
+                              ├──► gist_kb ──────────► GitHub Gists (with token)
+                              └──► browser ──────────► headless browser (CDP)
+```
+
+Reacher is stateless — a new MCP transport handler is created per request. No session state is stored server-side. Your tokens never leave your server.
+
+---
+
+## Prerequisites
+
+- A [Tailscale](https://tailscale.com) account with your devices enrolled
+- Node.js 18+ or Docker
+- A VPS or always-on machine reachable over HTTPS from Claude.ai
+- A Tailscale API key and a GitHub personal access token

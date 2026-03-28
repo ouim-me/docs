@@ -1,0 +1,151 @@
+---
+title: "Audit log"
+description: "Every tool call Reacher executes is written to a structured log file with sensitive keys stripped automatically."
+---
+
+The audit log gives you a complete, tamper-evident record of what Claude asked Reacher to do and whether it succeeded. It is enabled by default.
+
+---
+
+## What is logged
+
+Every tool call — regardless of which tool — produces one JSON line in the audit log:
+
+```json
+{"timestamp":"2026-03-18T14:23:01.456Z","tool":"ssh_exec","input":{"hostname":"prod-server","command":"df -h /","user":"deploy"},"success":true}
+{"timestamp":"2026-03-18T14:23:15.891Z","tool":"fetch_external","input":{"url":"https://api.github.com/repos/myorg/myrepo/issues","method":"GET"},"success":true}
+{"timestamp":"2026-03-18T14:24:02.123Z","tool":"gist_kb","input":{"action":"list"},"success":true}
+{"timestamp":"2026-03-18T14:25:44.310Z","tool":"ssh_exec","input":{"hostname":"prod-server","command":"rm -rf /tmp/cache","user":"deploy"},"success":false}
+```
+
+Each entry contains:
+
+- `timestamp` — ISO 8601 timestamp of the call
+- `tool` — name of the tool that was invoked
+- `input` — sanitized arguments passed to the tool
+- `success` — `true` if the tool returned successfully, `false` on error or block
+
+## What is not logged
+
+Sensitive keys are stripped from `input` before anything is written to disk. Any argument whose key name contains one of the following substrings (case-insensitive) is removed:
+
+- `token`
+- `password`
+- `secret`
+- `key`
+
+This means `GITHUB_TOKEN`, `MCP_SECRET`, API keys, and similar values never appear in the log file — even if they were passed as tool arguments.
+
+<Note>
+The result value from the tool is not logged — only the `success` boolean. Raw tool output (stdout, API responses, file contents) does not appear in the audit log.
+</Note>
+
+---
+
+## Configuration
+
+### Enable or disable
+
+<CodeGroup>
+
+```bash .env
+# Enable (default)
+AUDIT_ENABLED=true
+
+# Disable
+AUDIT_ENABLED=false
+```
+
+```yaml reacher.config.yaml
+audit:
+  enabled: true
+```
+
+</CodeGroup>
+
+Audit logging is enabled by default. Set `AUDIT_ENABLED=false` (the exact string `"false"`) to disable it.
+
+<Warning>
+Disabling the audit log means you have no record of what commands Claude ran on your infrastructure. Only disable it if you have an alternative logging mechanism in place.
+</Warning>
+
+### Log file location
+
+<CodeGroup>
+
+```bash .env
+AUDIT_LOG_PATH=./reacher-audit.log
+```
+
+```yaml reacher.config.yaml
+audit:
+  log_path: "./reacher-audit.log"
+```
+
+</CodeGroup>
+
+The default path is `./reacher-audit.log` relative to the project root. The file is created automatically if it does not exist. Entries are appended — the file is never truncated by Reacher.
+
+In production, use an absolute path and set up external log rotation:
+
+```yaml reacher.config.yaml
+audit:
+  log_path: "/var/log/reacher/audit.log"
+```
+
+---
+
+## Reading the log
+
+The log is newline-delimited JSON (NDJSON). Each line is a valid JSON object.
+
+**Follow in real time:**
+
+<CodeGroup>
+
+```bash Bare Node
+tail -f reacher-audit.log
+```
+
+```bash Docker
+docker exec reacher tail -f reacher-audit.log
+```
+
+</CodeGroup>
+
+**Pretty-print with `jq`:**
+
+```bash
+tail -f reacher-audit.log | jq .
+```
+
+**Filter to a specific tool:**
+
+```bash
+jq 'select(.tool == "ssh_exec")' reacher-audit.log
+```
+
+**Show only failures:**
+
+```bash
+jq 'select(.success == false)' reacher-audit.log
+```
+
+**Count calls by tool:**
+
+```bash
+jq -r '.tool' reacher-audit.log | sort | uniq -c | sort -rn
+```
+
+---
+
+## How it works
+
+The `auditLog` function in `src/lib/audit.js` is called after every tool execution in `src/mcp-server.js`. It:
+
+1. Checks `config.audit.enabled` — if `false`, returns immediately
+2. Copies the input arguments and deletes any key whose name contains a sensitive substring
+3. Builds a log entry with `timestamp`, `tool`, `input`, and `success`
+4. Appends the JSON-serialized entry plus a newline to the log file using `fs.appendFile`
+
+If the write fails (disk full, permissions issue), the error is printed to stderr but does not crash the server or affect the tool response.

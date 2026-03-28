@@ -1,0 +1,159 @@
+---
+title: "ssh_exec"
+description: "Execute shell commands on remote Tailscale devices — no manual SSH key setup required."
+---
+
+`ssh_exec` runs a shell command on a remote device over Tailscale SSH. It uses the Tailscale hostname directly — no IP addresses, no manual `known_hosts` management. The server spawns a real `ssh` process using a dedicated key mounted at `/root/.ssh/reacher-key`.
+
+Windows targets are supported via `cmd` (default) or `powershell`. PowerShell commands are automatically encoded as Base64 UTF-16LE before being sent, which prevents quoting and escaping issues.
+
+<Warning>
+Tailscale SSH must be explicitly enabled on each target device before this tool can connect. Run `sudo tailscale up --ssh` on the device to enable it.
+</Warning>
+
+## Parameters
+
+<ParamField path="hostname" type="string" required>
+  Tailscale hostname of the target device (e.g. `"myserver"`). Use `tailscale_status` to list available hostnames.
+</ParamField>
+
+<ParamField path="command" type="string" required>
+  Shell command to execute on the remote device.
+</ParamField>
+
+<ParamField path="user" type="string">
+  SSH user to connect as. The schema default is `hazem` (the project author's username — you will almost certainly need to override this). Always specify the correct user for your target device, e.g. `ubuntu`, `root`, or your own username.
+</ParamField>
+
+<ParamField path="shell" type="string">
+  Shell to use on Windows targets. Accepted values: `cmd` or `powershell`. Defaults to `cmd`. Ignored on non-Windows hosts.
+</ParamField>
+
+## Return value
+
+<ResponseField name="success" type="boolean">
+  `true` if the command exited with code 0.
+</ResponseField>
+
+<ResponseField name="hostname" type="string">
+  The target hostname as provided.
+</ResponseField>
+
+<ResponseField name="user" type="string">
+  The SSH user used for the connection.
+</ResponseField>
+
+<ResponseField name="command" type="string">
+  The command that was executed.
+</ResponseField>
+
+<ResponseField name="shell" type="string">
+  The shell used (`cmd` or `powershell`).
+</ResponseField>
+
+<ResponseField name="stdout" type="string">
+  Trimmed standard output from the command.
+</ResponseField>
+
+<ResponseField name="stderr" type="string">
+  Trimmed standard error output.
+</ResponseField>
+
+<ResponseField name="exitCode" type="number">
+  Process exit code. `0` means success.
+</ResponseField>
+
+<ResponseField name="blocked" type="boolean">
+  Present and `true` when the command was blocked by a safety rule. Also includes `reason` and `matched_rule` fields.
+</ResponseField>
+
+<ResponseField name="dry_run" type="boolean">
+  Present and `true` when `DRY_RUN=true` is set. Includes a `would_execute` field instead of running the command.
+</ResponseField>
+
+## Usage examples
+
+<CodeGroup>
+```json Check disk usage
+{
+  "hostname": "homelab",
+  "command": "df -h /"
+}
+```
+
+```json Tail application logs
+{
+  "hostname": "prod-server",
+  "command": "tail -n 50 /var/log/myapp/app.log"
+}
+```
+
+```json List running processes
+{
+  "hostname": "prod-server",
+  "command": "ps aux --sort=-%cpu | head -20"
+}
+```
+
+```json Run a deployment script
+{
+  "hostname": "deploy-box",
+  "command": "/home/deploy/scripts/deploy.sh"
+}
+```
+
+```json PowerShell on Windows
+{
+  "hostname": "win-workstation",
+  "command": "Get-Process | Sort-Object CPU -Descending | Select-Object -First 10",
+  "shell": "powershell"
+}
+```
+</CodeGroup>
+
+## Safety considerations
+
+Reacher enforces two optional safety layers configured in `reacher.config.yaml`:
+
+### Command blocklist
+
+`ssh.blocked_commands` is a list of substrings. If any blocked string appears in the command (case-insensitive), the tool returns immediately with `success: false` and `blocked: true` — the SSH connection is never made.
+
+```yaml
+ssh:
+  blocked_commands:
+    - 'rm -rf'
+    - 'shutdown'
+    - 'reboot'
+```
+
+### Directory allowlist
+
+`ssh.allowed_dirs` restricts SSH operations to specific paths. The tool parses path tokens from the command (tokens starting with `/`, `~`, or `./`) and checks each one against the list. An empty list means no restriction.
+
+```yaml
+ssh:
+  allowed_dirs:
+    - /home/deploy
+    - /var/log/myapp
+```
+
+### Dry-run mode
+
+Set `DRY_RUN=true` to have `ssh_exec` evaluate safety rules and return a `would_execute` response without making any SSH connection. Useful for testing configurations.
+
+<Note>
+All tool calls are written to `reacher-audit.log` with timestamp, arguments, and result. Sensitive keys are stripped automatically.
+</Note>
+
+## Common use cases
+
+- **Check logs** — `tail`, `journalctl`, `cat` on log files
+- **Inspect processes** — `ps`, `top`, `htop` snapshots
+- **Run deployments** — trigger deploy scripts, `git pull`, `docker compose up`
+- **System health** — `df`, `free`, `uptime`, `systemctl status`
+- **File inspection** — read configs, check file permissions, list directory contents
+
+<Tip>
+Run `tailscale_status` first to discover available hostnames and verify a device is online before attempting SSH.
+</Tip>

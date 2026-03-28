@@ -1,0 +1,134 @@
+---
+title: "tailscale_status"
+description: "List all devices in your Tailscale network with IPs, OS, online status, and last-seen time."
+---
+
+`tailscale_status` queries the Tailscale API and returns every device enrolled in your tailnet. It separates devices into online and offline, and returns key metadata for each one.
+
+This tool is the natural starting point for any SSH workflow — use it to discover available hostnames before calling `ssh_exec`, or to debug why a device isn't reachable.
+
+<Note>
+Requires `TAILSCALE_API_KEY` to be set in your environment. Generate a key at [tailscale.com/admin/settings/keys](https://tailscale.com/admin/settings/keys).
+</Note>
+
+## Parameters
+
+This tool takes no parameters. It fetches your entire tailnet automatically.
+
+## Return value
+
+<ResponseField name="success" type="boolean">
+  Always `true` on a successful API call.
+</ResponseField>
+
+<ResponseField name="summary" type="object">
+  Aggregate counts for the tailnet.
+  <Expandable title="properties">
+    <ResponseField name="total" type="number">
+      Total number of devices enrolled.
+    </ResponseField>
+    <ResponseField name="online" type="number">
+      Number of devices currently online.
+    </ResponseField>
+    <ResponseField name="offline" type="number">
+      Number of devices currently offline.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="devices" type="array">
+  Array of device objects, one per enrolled device.
+  <Expandable title="properties">
+    <ResponseField name="name" type="string">
+      Full device name as registered in Tailscale (includes tailnet domain suffix).
+    </ResponseField>
+    <ResponseField name="hostname" type="string">
+      Short hostname of the device. Use this value as the `hostname` parameter in `ssh_exec`.
+    </ResponseField>
+    <ResponseField name="status" type="string">
+      Either `"online"` or `"offline"`.
+    </ResponseField>
+    <ResponseField name="os" type="string">
+      Operating system reported by Tailscale (e.g. `linux`, `windows`, `macOS`).
+    </ResponseField>
+    <ResponseField name="ips" type="array">
+      Array of Tailscale IP addresses assigned to the device.
+    </ResponseField>
+    <ResponseField name="clientVersion" type="string">
+      Tailscale client version running on the device.
+    </ResponseField>
+    <ResponseField name="lastSeen" type="string">
+      ISO 8601 timestamp of when the device was last seen by the Tailscale coordination server.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Example output
+
+```json
+{
+  "success": true,
+  "summary": {
+    "total": 4,
+    "online": 3,
+    "offline": 1
+  },
+  "devices": [
+    {
+      "name": "homelab.tail1234.ts.net",
+      "hostname": "homelab",
+      "status": "online",
+      "os": "linux",
+      "ips": ["100.64.0.1"],
+      "clientVersion": "1.58.2-t8b4a2e60f-g4b2e60f",
+      "lastSeen": "2026-03-18T10:22:00Z"
+    },
+    {
+      "name": "win-workstation.tail1234.ts.net",
+      "hostname": "win-workstation",
+      "status": "online",
+      "os": "windows",
+      "ips": ["100.64.0.2"],
+      "clientVersion": "1.58.2",
+      "lastSeen": "2026-03-18T10:21:45Z"
+    },
+    {
+      "name": "old-vps.tail1234.ts.net",
+      "hostname": "old-vps",
+      "status": "offline",
+      "os": "linux",
+      "ips": ["100.64.0.3"],
+      "clientVersion": "1.52.0",
+      "lastSeen": "2026-02-10T08:00:00Z"
+    }
+  ]
+}
+```
+
+## Common use cases
+
+**Discover hostnames before SSH**
+
+Call `tailscale_status` at the start of a session to build a map of available devices. The `hostname` field is what you pass directly to `ssh_exec`.
+
+**Check online status before running commands**
+
+If `ssh_exec` fails to connect, `tailscale_status` will show whether the device is offline vs. a real SSH configuration problem.
+
+**Audit your network**
+
+Spot devices running old client versions (`clientVersion`), identify machines that haven't been seen recently (`lastSeen`), or verify a new device enrolled successfully.
+
+**Save a device map to the knowledge base**
+
+After discovering your devices, use `gist_kb` to save the hostname-to-purpose mapping so future sessions don't need to re-run discovery.
+
+```json
+// Follow-up gist_kb call to save the device map
+{
+  "action": "create",
+  "title": "device-map",
+  "content": "homelab: home NAS and media server\nprod-server: production VPS\nwin-workstation: Windows dev machine",
+  "description": "Tailscale device map"
+}
+```

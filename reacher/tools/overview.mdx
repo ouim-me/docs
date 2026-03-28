@@ -1,0 +1,77 @@
+---
+title: "Tools Overview"
+description: "All six Reacher tools — what they do, how they're registered, and when to use each one."
+---
+
+Reacher exposes six tools to Claude. Each tool is a single self-contained file in `src/tools/`. They share a common registration pattern but are otherwise fully independent — no shared state, no cross-tool dependencies.
+
+## Design philosophy
+
+The surface area is intentional. Rather than shipping a dedicated tool for every API (GitHub, Linear, Notion, Jira…), Reacher ships one authenticated HTTP proxy — `fetch_external` — and lets you add any API by adding its domain to an allowlist. Claude already knows REST APIs. It just needs a way to call them with your credentials without you pasting tokens into every prompt.
+
+The result is six tools that cover the full infrastructure loop:
+
+- **Discover** your machines (`tailscale_status`)
+- **Execute** commands on them (`ssh_exec`)
+- **Call** any allowed API (`fetch_external`)
+- **Search** GitHub activity (`github_search`)
+- **Persist** knowledge across conversations (`gist_kb`)
+- **Automate** web tasks (`browser`)
+
+## Tool registration pattern
+
+Every tool in `src/tools/*.js` exports four things:
+
+```js
+export const name = 'tool_name'
+export const description = '...'
+export const schema = { param: z.string().describe('...') } // Zod shape
+export async function handler(args, ...envArgs) { ... }
+```
+
+All tools are registered in `src/mcp-server.js` via `server.tool(name, description, schema, handler)`. The server wraps each handler to inject the appropriate environment variables (API keys, allowed domains) so Claude never receives them directly.
+
+```js
+// Example from mcp-server.js
+server.tool(sshExec.name, sshExec.description, sshExec.schema, async args => {
+  const result = await sshExec.handler(args)
+  await auditLog(sshExec.name, args, result)
+  return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] }
+})
+```
+
+Each handler receives only the env vars it needs — not the full environment — following a least-privilege principle.
+
+## Tools summary
+
+| Tool | What it does | Key use case |
+|------|-------------|-------------|
+| `ssh_exec` | Run shell commands on any Tailscale device | Manage servers, check logs, run deployments |
+| `tailscale_status` | List all devices with online/offline status, IPs, OS | Discover hostnames before SSHing, debug connectivity |
+| `fetch_external` | Proxy HTTP requests with injected auth per domain | Call GitHub, Jira, or any API without pasting tokens |
+| `github_search` | Search GitHub for pull requests or commits | Find work by author and date range with minimal output |
+| `gist_kb` | Read/write a private knowledge base backed by GitHub Gists | Persist notes, configs, and context across conversations |
+| `browser` | Control a headless browser via CDP using `agent-browser` CLI | Scrape pages, fill forms, take snapshots, automate web tasks |
+
+## All tools
+
+<CardGroup cols={2}>
+  <Card title="ssh_exec" icon="terminal" href="/tools/ssh-exec">
+    Execute shell commands on remote Tailscale devices. Supports Linux and Windows (cmd/PowerShell), with a command blocklist and directory allowlist.
+  </Card>
+  <Card title="tailscale_status" icon="network-wired" href="/tools/tailscale-status">
+    List every device in your Tailscale network with IPs, OS, online status, and last-seen time.
+  </Card>
+  <Card title="fetch_external" icon="globe" href="/tools/fetch-external">
+    Authenticated HTTP proxy with per-domain token injection. Add any API by adding one line to your config.
+  </Card>
+  <Card title="github_search" icon="github" href="/tools/github-search">
+    Search GitHub for pull requests or commits by author and date range, with clean minimal output.
+  </Card>
+  <Card title="gist_kb" icon="book" href="/tools/gist-kb">
+    Persistent knowledge base backed by private GitHub Gists. Read, write, list, and delete entries across conversations.
+  </Card>
+  <Card title="browser" icon="browser" href="/tools/browser">
+    CDP-based headless browser control via the `agent-browser` CLI. Navigate, click, fill forms, and take snapshots.
+  </Card>
+</CardGroup>

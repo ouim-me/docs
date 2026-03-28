@@ -1,0 +1,190 @@
+---
+title: "Environment variables"
+description: "Complete reference for all environment variables that configure Reacher's authentication, tools, safety, and server behavior."
+---
+
+Reacher is configured primarily through environment variables in a `.env` file at the project root. Copy `.env.example` to `.env` and fill in your values before starting the server.
+
+```bash
+cp .env.example .env
+```
+
+<Note>
+`MCP_SECRET`, `TAILSCALE_API_KEY`, and `GITHUB_TOKEN` are validated at startup. The server will exit immediately if any of these are missing.
+</Note>
+
+---
+
+## Authentication
+
+<ParamField path="MCP_SECRET" type="string" required>
+  Shared secret that Claude.ai sends with every request as a URL query parameter (`?token=...`). All requests without the correct token are rejected with `401 Unauthorized`.
+
+  Generate a secure value with:
+
+  ```bash
+  openssl rand -hex 32
+  ```
+
+  Never reuse a token across environments. Treat this like a password.
+</ParamField>
+
+---
+
+## Tailscale
+
+<ParamField path="TAILSCALE_API_KEY" type="string" required>
+  API key for the Tailscale control plane. Used by `tailscale_status` to query device list, IP addresses, and online/offline status.
+
+  **Required scope:** Devices (read)
+
+  Create one at [login.tailscale.com/admin/settings/keys](https://login.tailscale.com/admin/settings/keys).
+</ParamField>
+
+---
+
+## GitHub
+
+<ParamField path="GITHUB_TOKEN" type="string" required>
+  Personal access token for GitHub API calls. Used by:
+
+  - `gist_kb` — read and write private Gists
+  - `github_search` — search pull requests and commits
+  - `fetch_external` — inject auth on requests to `api.github.com` (when configured in `FETCH_EXTERNAL_TOKEN_MAP`)
+
+  **Required scope:** `gist` (read + write). Add `repo` if you need to search private repositories.
+
+  Create one at [github.com/settings/tokens](https://github.com/settings/tokens).
+</ParamField>
+
+---
+
+## HTTP proxy
+
+<ParamField path="PROXY_ALLOWED_DOMAINS" type="string" required>
+  Comma-separated list of hostnames that `fetch_external` is permitted to call. Requests to any domain not in this list are rejected before the HTTP call is made.
+
+  ```bash
+  PROXY_ALLOWED_DOMAINS=api.github.com,api.linear.app,api.notion.com
+  ```
+
+  Matching is done against the exact hostname parsed from the request URL. See [Domain allowlist](/configuration/domain-allowlist) for a full explanation.
+</ParamField>
+
+<ParamField path="FETCH_EXTERNAL_TOKEN_MAP" type="string" default='{}' >
+  JSON object that maps hostnames to environment variable names. When `fetch_external` makes a request to a matching domain, it reads the named environment variable and injects it as an `Authorization: Bearer <token>` header.
+
+  ```bash
+  FETCH_EXTERNAL_TOKEN_MAP={"api.github.com":"GITHUB_TOKEN","api.linear.app":"LINEAR_API_TOKEN"}
+  ```
+
+  The token value never leaves the server — Claude only sees the result of the API call. See [Domain allowlist](/configuration/domain-allowlist) for examples.
+</ParamField>
+
+---
+
+## SSH safety
+
+<ParamField path="SSH_BLOCKED_COMMANDS" type="string" default="rm -rf /,shutdown,reboot,mkfs,dd,format">
+  Comma-separated list of command substrings to block from `ssh_exec`. Matching is case-insensitive substring matching — if any blocked string appears anywhere in the command, the command is rejected.
+
+  ```bash
+  SSH_BLOCKED_COMMANDS=rm -rf /,shutdown,reboot,mkfs,dd,format
+  ```
+
+  This variable overrides `ssh.blocked_commands` in `reacher.config.yaml`. The same setting can also be managed in the YAML file as a list, which supports comments and easier editing.
+</ParamField>
+
+<ParamField path="SSH_ALLOWED_DIRS" type="string" default="(empty — no restriction)">
+  Comma-separated list of directory prefixes. When set, `ssh_exec` will only allow commands that operate on paths starting with one of the listed directories.
+
+  ```bash
+  SSH_ALLOWED_DIRS=/home/deploy,/tmp,/var/log
+  ```
+
+  When empty (the default), there are no directory restrictions. This variable overrides `ssh.allowed_dirs` in `reacher.config.yaml`.
+</ParamField>
+
+---
+
+## Audit logging
+
+<ParamField path="AUDIT_ENABLED" type="string" default="true">
+  Set to `false` to disable audit logging entirely. Any other value (or the absence of this variable) leaves auditing enabled.
+
+  ```bash
+  AUDIT_ENABLED=false
+  ```
+
+  When enabled, every tool call is written as a JSON line to `AUDIT_LOG_PATH`. Sensitive keys (anything containing `token`, `password`, `secret`, or `key`) are stripped from the log entry automatically.
+
+  This variable overrides `audit.enabled` in `reacher.config.yaml`.
+</ParamField>
+
+<ParamField path="AUDIT_LOG_PATH" type="string" default="./reacher-audit.log">
+  Path to the audit log file. Accepts both relative paths (resolved from the project root) and absolute paths.
+
+  ```bash
+  AUDIT_LOG_PATH=/var/log/reacher/audit.log
+  ```
+
+  The file is created automatically if it does not exist. Entries are appended, so the file grows continuously — rotate it with a tool like `logrotate` in production.
+
+  This variable overrides `audit.log_path` in `reacher.config.yaml`.
+</ParamField>
+
+---
+
+## Server
+
+<ParamField path="PORT" type="number" default="3000">
+  TCP port that the Express HTTP server listens on.
+
+  ```bash
+  PORT=8080
+  ```
+
+  When deploying behind a reverse proxy (Caddy, Nginx, Traefik), this is the internal port the proxy forwards to. Claude.ai connects to the public HTTPS URL, not this port directly.
+</ParamField>
+
+<ParamField path="DRY_RUN" type="string" default="false">
+  Set to `true` to put `ssh_exec` into dry-run mode. In this mode, `ssh_exec` logs the command it would have run but does not actually execute it.
+
+  ```bash
+  DRY_RUN=true
+  ```
+
+  Useful for testing prompts and validating what Claude would do before granting live SSH access. The `/health` endpoint reports the current dry-run state.
+
+  This variable overrides `dry_run` in `reacher.config.yaml`.
+</ParamField>
+
+---
+
+## Browser
+
+<ParamField path="BROWSER_CDP_HOST" type="string" default="127.0.0.1">
+  Hostname or IP address of the Chrome DevTools Protocol (CDP) compatible browser that the `browser` tool connects to.
+
+  ```bash
+  BROWSER_CDP_HOST=127.0.0.1
+  ```
+
+  Requires a running CDP-compatible browser (such as Lightpanda or Chrome with `--remote-debugging-port`) and the `agent-browser` CLI installed globally.
+</ParamField>
+
+<ParamField path="BROWSER_CDP_PORT" type="number" default="9222">
+  Port of the CDP-compatible browser.
+
+  ```bash
+  BROWSER_CDP_PORT=9222
+  ```
+</ParamField>
+
+---
+
+## Precedence rules
+
+When the same setting exists in both `.env` and `reacher.config.yaml`, the environment variable always wins. This makes it safe to commit a base `reacher.config.yaml` to version control and override specific values per deployment via environment variables.
+
+See [reacher.config.yaml reference](/configuration/reacher-config) for full details on the YAML config file.

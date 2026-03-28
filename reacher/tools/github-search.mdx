@@ -1,0 +1,161 @@
+---
+title: "github_search"
+description: "Search GitHub for pull requests or commits by author and date, with clean minimal output."
+---
+
+`github_search` is a focused tool for querying GitHub activity. It searches for pull requests or commits by author within a date range and returns only the essential fields — no pagination tokens, no nested objects, no raw API noise.
+
+Unlike calling the GitHub API through `fetch_external`, this tool handles query construction, header setup (commits search requires a special `Accept` header), and response shaping automatically.
+
+## Prerequisites
+
+- `GITHUB_TOKEN` must be set in your environment
+- `api.github.com` must be in `PROXY_ALLOWED_DOMAINS`
+- The token must be configured for injection in `FETCH_EXTERNAL_TOKEN_MAP`:
+  ```bash
+  PROXY_ALLOWED_DOMAINS=api.github.com
+  FETCH_EXTERNAL_TOKEN_MAP={"api.github.com":"GITHUB_TOKEN"}
+  GITHUB_TOKEN=ghp_xxxxxxxxxxxx
+  ```
+
+## Parameters
+
+<ParamField path="type" type="string" required>
+  What to search for. Must be either `"prs"` (pull requests) or `"commits"`.
+</ParamField>
+
+<ParamField path="repo" type="string" required>
+  Repository in `owner/repo` format (e.g. `"thezem/reacher"`).
+</ParamField>
+
+<ParamField path="author" type="string" required>
+  GitHub username to filter by (e.g. `"thezem"`).
+</ParamField>
+
+<ParamField path="created_after" type="string" required>
+  ISO date string. Returns items created on or after this date (e.g. `"2026-03-01"`). For commits this filters by committer date.
+</ParamField>
+
+<ParamField path="per_page" type="number">
+  Number of results to return. Min `1`, max `100`. Defaults to `25`.
+</ParamField>
+
+## Return value
+
+<ResponseField name="success" type="boolean">
+  `true` on a successful GitHub API response.
+</ResponseField>
+
+<ResponseField name="items" type="array">
+  Array of result objects. Shape depends on `type`.
+
+  <Expandable title="PR fields (type: prs)">
+    <ResponseField name="number" type="number">
+      Pull request number.
+    </ResponseField>
+    <ResponseField name="title" type="string">
+      PR title.
+    </ResponseField>
+    <ResponseField name="url" type="string">
+      HTML URL to the PR on GitHub.
+    </ResponseField>
+    <ResponseField name="state" type="string">
+      `"open"` or `"closed"`.
+    </ResponseField>
+    <ResponseField name="draft" type="boolean">
+      Whether the PR is a draft.
+    </ResponseField>
+    <ResponseField name="merged" type="boolean">
+      Whether the PR has been merged.
+    </ResponseField>
+    <ResponseField name="created_at" type="string">
+      ISO date (date portion only, e.g. `"2026-03-10"`).
+    </ResponseField>
+  </Expandable>
+
+  <Expandable title="Commit fields (type: commits)">
+    <ResponseField name="sha" type="string">
+      Short SHA (first 7 characters).
+    </ResponseField>
+    <ResponseField name="message" type="string">
+      First line of the commit message only.
+    </ResponseField>
+    <ResponseField name="date" type="string">
+      ISO date of the commit (date portion only, e.g. `"2026-03-10"`).
+    </ResponseField>
+    <ResponseField name="url" type="string">
+      HTML URL to the commit on GitHub.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Usage examples
+
+<CodeGroup>
+```json Find open PRs by author
+{
+  "type": "prs",
+  "repo": "thezem/reacher",
+  "author": "thezem",
+  "created_after": "2026-01-01"
+}
+```
+
+```json Find recent merged PRs
+{
+  "type": "prs",
+  "repo": "thezem/reacher",
+  "author": "thezem",
+  "created_after": "2026-03-01",
+  "per_page": 10
+}
+```
+
+```json Find commits this week
+{
+  "type": "commits",
+  "repo": "thezem/reacher",
+  "author": "thezem",
+  "created_after": "2026-03-10"
+}
+```
+</CodeGroup>
+
+## Example output
+
+<CodeGroup>
+```json PR results
+{
+  "success": true,
+  "items": [
+    {
+      "number": 42,
+      "title": "Add browser tool with CDP support",
+      "url": "https://github.com/thezem/reacher/pull/42",
+      "state": "closed",
+      "draft": false,
+      "merged": true,
+      "created_at": "2026-03-12"
+    }
+  ]
+}
+```
+
+```json Commit results
+{
+  "success": true,
+  "items": [
+    {
+      "sha": "a1b2c3d",
+      "message": "fix: handle CDP connection timeout gracefully",
+      "date": "2026-03-15",
+      "url": "https://github.com/thezem/reacher/commit/a1b2c3d"
+    }
+  ]
+}
+```
+</CodeGroup>
+
+<Note>
+The GitHub commits search API requires the `Accept: application/vnd.github.cloak-preview` header. This is handled automatically by the tool — you don't need to pass it.
+</Note>

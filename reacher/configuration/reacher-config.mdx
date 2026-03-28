@@ -1,0 +1,216 @@
+---
+title: "reacher.config.yaml"
+description: "Reference for the optional YAML configuration file that manages safety and behavior settings."
+---
+
+`reacher.config.yaml` is an optional configuration file for managing Reacher's safety and behavior settings. It is designed for settings you want to keep in version control and review as code — particularly the SSH blocklist and audit configuration.
+
+## Setup
+
+```bash
+cp reacher.config.example.yaml reacher.config.yaml
+```
+
+Edit the file, then restart the server. There is no hot-reload — changes take effect on the next startup.
+
+<Note>
+Environment variables always take precedence over YAML values. If `DRY_RUN=true` is set in your environment, the `dry_run: false` in the YAML file has no effect.
+</Note>
+
+---
+
+## Full annotated example
+
+```yaml reacher.config.yaml
+# Reacher Configuration File
+# This file is optional. All settings can be overridden via environment variables.
+# Environment variables always take precedence over YAML config.
+#
+# To use this file:
+# 1. Copy to reacher.config.yaml in the project root
+# 2. Edit the values as needed
+# 3. Restart the server for changes to take effect
+
+# SSH Configuration
+ssh:
+  # List of commands to block from execution.
+  # Supports substring matching (case-insensitive).
+  # If "rm -rf" is in the list, any command containing "rm -rf" is rejected.
+  blocked_commands:
+    - "rm -rf"
+    - "dd"
+    - ":(){ :|:& };:" # fork bomb
+
+  # List of directories where SSH commands are allowed to operate.
+  # If empty (or omitted), all directories are allowed — no restriction.
+  # Uses prefix matching: "/home/user" allows "/home/user/file.txt".
+  allowed_dirs:
+    # - "/home/deploy"
+    # - "/tmp"
+    # - "/var/log"
+
+# Audit Configuration
+audit:
+  # Enable or disable audit logging.
+  # All tool calls are written as JSON lines to audit.log_path.
+  # Sensitive keys (token, password, secret, key) are stripped automatically.
+  enabled: true
+
+  # Path to audit log file.
+  # Accepts relative paths (resolved from project root) or absolute paths.
+  log_path: "./reacher-audit.log"
+
+# Dry-run Mode
+# When true, ssh_exec logs commands but does not execute them.
+# Useful for testing prompts before granting live SSH access.
+dry_run: false
+```
+
+---
+
+## Settings reference
+
+### `ssh.blocked_commands`
+
+| | |
+|---|---|
+| **Type** | `string[]` |
+| **Default** | `[]` (no commands blocked) |
+| **Env override** | `SSH_BLOCKED_COMMANDS` (comma-separated) |
+
+A list of command substrings to block from `ssh_exec`. Matching is case-insensitive and substring-based: if any string in this list appears anywhere in the submitted command, the command is rejected before it is sent over SSH.
+
+```yaml
+ssh:
+  blocked_commands:
+    - "rm -rf"
+    - "shutdown"
+    - "reboot"
+    - "mkfs"
+    - "dd"
+    - ":(){ :|:& };:" # fork bomb
+```
+
+<Tip>
+Start with a conservative blocklist and expand it based on what your use case requires. Blocking `dd`, `mkfs`, and fork bombs covers the most destructive one-liners.
+</Tip>
+
+### `ssh.allowed_dirs`
+
+| | |
+|---|---|
+| **Type** | `string[]` |
+| **Default** | `[]` (no directory restriction) |
+| **Env override** | `SSH_ALLOWED_DIRS` (comma-separated) |
+
+Optional list of directory prefixes. When set, `ssh_exec` only permits commands whose working path starts with one of the listed directories. An empty list (the default) applies no restriction.
+
+Prefix matching means `/home/deploy` permits `/home/deploy/app/` and `/home/deploy/logs/`, but not `/home/other/`.
+
+```yaml
+ssh:
+  allowed_dirs:
+    - "/home/deploy"
+    - "/tmp"
+    - "/var/log"
+```
+
+### `audit.enabled`
+
+| | |
+|---|---|
+| **Type** | `boolean` |
+| **Default** | `true` |
+| **Env override** | `AUDIT_ENABLED` (set to `"false"` to disable) |
+
+Controls whether tool calls are written to the audit log. When `true`, every call to any Reacher tool produces a JSON log entry containing the timestamp, tool name, sanitized input, and success status.
+
+### `audit.log_path`
+
+| | |
+|---|---|
+| **Type** | `string` |
+| **Default** | `"./reacher-audit.log"` |
+| **Env override** | `AUDIT_LOG_PATH` |
+
+File path for the audit log. The file is created if it does not exist and entries are appended on each tool call. In production, use an absolute path and configure log rotation.
+
+```yaml
+audit:
+  log_path: "/var/log/reacher/audit.log"
+```
+
+### `dry_run`
+
+| | |
+|---|---|
+| **Type** | `boolean` |
+| **Default** | `false` |
+| **Env override** | `DRY_RUN` (set to `"true"` to enable) |
+
+When `true`, `ssh_exec` returns a simulated response describing the command it would have run, without making any SSH connection. All other tools continue to operate normally.
+
+The current dry-run state is visible in the `/health` endpoint response:
+
+```json
+{ "status": "ok", "timestamp": "...", "dry_run": true }
+```
+
+---
+
+## How the config system works
+
+On startup, Reacher reads `reacher.config.yaml` from the project root (if it exists) using `js-yaml`. The parsed YAML values are merged with environment variables according to the following precedence rules:
+
+1. **Environment variable is set** → use the environment variable value, ignore YAML
+2. **Environment variable is not set, YAML value exists** → use the YAML value
+3. **Neither is set** → use the built-in default
+
+The merge logic in `src/lib/config.js` handles type coercion for boolean-like variables. For `AUDIT_ENABLED`, only the exact string `"false"` disables auditing. For `DRY_RUN`, only the exact string `"true"` enables it.
+
+<Warning>
+The YAML file is only read once at startup. Editing `reacher.config.yaml` while the server is running has no effect until you restart the process.
+</Warning>
+
+---
+
+## Reloading configuration
+
+<Steps>
+
+<Step title="Edit reacher.config.yaml">
+Make your changes and save the file.
+</Step>
+
+<Step title="Restart the server">
+
+<CodeGroup>
+
+```bash Docker
+docker compose restart reacher
+```
+
+```bash Bare Node
+# If running with PM2:
+pm2 restart reacher
+
+# If running directly:
+# Send SIGINT (Ctrl+C) and restart:
+node index.js
+```
+
+</CodeGroup>
+
+</Step>
+
+<Step title="Verify the change took effect">
+
+Check the startup log output, or query the health endpoint to confirm dry-run state:
+
+```bash
+curl "http://localhost:3000/health?token=YOUR_MCP_SECRET"
+```
+
+</Step>
+
+</Steps>

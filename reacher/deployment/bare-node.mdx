@@ -1,0 +1,198 @@
+---
+title: "Bare Node.js"
+description: "Run Reacher directly with Node.js on any machine without Docker."
+---
+
+Running Reacher directly with Node.js is the lightest-weight option and works well on any VPS where you already manage the process lifecycle.
+
+## Prerequisites
+
+- Node.js 18 or later (`node --version` to check)
+- npm (bundled with Node.js)
+- Git
+
+## Setup
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone --branch v0.1.0 https://github.com/thezem/reacher.git
+    cd reacher
+    ```
+  </Step>
+
+  <Step title="Install dependencies">
+    ```bash
+    npm install
+    ```
+  </Step>
+
+  <Step title="Configure environment and config files">
+    ```bash
+    cp .env.example .env
+    cp reacher.config.example.yaml reacher.config.yaml
+    ```
+
+    Open `.env` and fill in your credentials. The required variables are:
+
+    ```bash
+    MCP_SECRET=<random-string>        # openssl rand -hex 32
+    TAILSCALE_API_KEY=<your-key>
+    GITHUB_TOKEN=<your-token>
+    PROXY_ALLOWED_DOMAINS=api.github.com
+    ```
+
+    See [`.env.example`](https://github.com/thezem/reacher/blob/main/.env.example) for the full list of options.
+  </Step>
+
+  <Step title="Start the server">
+    ```bash
+    node index.js
+    ```
+
+    The server starts on port 3000 by default (or `PORT` from your `.env`).
+
+    ```
+    ✅ MCP Server started on http://localhost:3000
+       POST http://localhost:3000/mcp
+       GET  http://localhost:3000/health
+    ```
+  </Step>
+
+  <Step title="Verify it is running">
+    ```bash
+    curl "http://localhost:3000/health?token=YOUR_MCP_SECRET"
+    ```
+
+    Expected response: `{"status":"ok",...}`
+  </Step>
+</Steps>
+
+## Start options
+
+<CodeGroup>
+```bash npm start
+npm start
+```
+
+```bash node directly
+node index.js
+```
+</CodeGroup>
+
+Both are equivalent — `npm start` is defined as `node index.js` in `package.json`.
+
+## Development mode with auto-reload
+
+During development, use `--watch` mode so the server restarts automatically when you edit files:
+
+```bash
+npm run dev
+```
+
+This runs `node --watch index.js` (built into Node.js 18+, no extra tools needed).
+
+## Production with PM2
+
+For a long-running production deployment, PM2 manages the process, restarts it on crash, and survives reboots.
+
+<Steps>
+  <Step title="Install PM2 globally">
+    ```bash
+    npm install -g pm2
+    ```
+  </Step>
+
+  <Step title="Start Reacher with PM2">
+    <CodeGroup>
+    ```bash Start
+    pm2 start index.js --name reacher
+    ```
+
+    ```bash Start with log file
+    pm2 start index.js --name reacher --log ./reacher.log
+    ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Save the process list and enable startup">
+    ```bash
+    pm2 save
+    pm2 startup
+    ```
+
+    Run the command that `pm2 startup` prints — this registers PM2 to launch on system boot.
+  </Step>
+</Steps>
+
+### Useful PM2 commands
+
+```bash
+pm2 status                  # show all managed processes
+pm2 logs reacher            # stream live logs
+pm2 logs reacher --lines 50 # last 50 log lines
+pm2 restart reacher         # restart the process
+pm2 stop reacher            # stop without removing
+pm2 delete reacher          # stop and remove from PM2
+```
+
+## Health check
+
+```bash
+curl "http://localhost:3000/health?token=YOUR_MCP_SECRET"
+```
+
+```json
+{
+  "status": "ok",
+  "timestamp": "2026-03-18T12:00:00.000Z",
+  "dry_run": false
+}
+```
+
+## Updating
+
+<Steps>
+  <Step title="Pull the latest code">
+    ```bash
+    git pull
+    ```
+  </Step>
+
+  <Step title="Install any new dependencies">
+    ```bash
+    npm install
+    ```
+  </Step>
+
+  <Step title="Restart the server">
+    <CodeGroup>
+    ```bash PM2
+    pm2 restart reacher
+    ```
+
+    ```bash Manual
+    # Stop the running process (Ctrl+C or kill), then:
+    node index.js
+    ```
+    </CodeGroup>
+  </Step>
+</Steps>
+
+## Exposing Reacher publicly
+
+The server listens on `http://localhost:3000` by default. Claude.ai requires a public HTTPS URL to connect.
+
+The standard approach on a VPS is a reverse proxy. Caddy handles HTTPS certificate provisioning automatically:
+
+```
+mcp.yourdomain.com {
+  reverse_proxy localhost:3000
+}
+```
+
+With Nginx, add a server block that proxies to port 3000 and configure Certbot for TLS.
+
+<Info>
+  Cloud platforms like EasyPanel, Railway, and Render handle HTTPS automatically if you prefer not to manage a reverse proxy yourself. See the other deployment guides for those options.
+</Info>

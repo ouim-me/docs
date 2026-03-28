@@ -1,0 +1,160 @@
+---
+title: "gist_kb"
+description: "Persistent knowledge base backed by private GitHub Gists, namespaced with the cc-- prefix."
+---
+
+`gist_kb` gives Claude a persistent, writable memory store that survives across conversations. It wraps the GitHub Gist API, storing each entry as a private gist with a `cc--` filename prefix to namespace all Reacher-managed content.
+
+Unlike in-context memory, entries written to `gist_kb` are available in any future session — no need to re-establish context, re-discover devices, or re-paste configuration.
+
+## How it works
+
+Each entry is a private GitHub Gist where the main file's name starts with `cc--`. The prefix is enforced automatically — if you pass `title: "device-map"`, the gist file is created as `cc--device-map`. This namespacing ensures `list` only returns Reacher-managed entries and never clutters other gists.
+
+Operations map directly to GitHub Gist API calls:
+- `list` — paginate all gists and filter to those with `cc--` files
+- `get` — fetch the full content of a gist by ID
+- `create` — create a new private gist
+- `update` — patch an existing gist's file content
+- `delete` — delete a gist permanently
+
+<Note>
+Requires `GITHUB_TOKEN` with the `gist` OAuth scope.
+</Note>
+
+## Parameters
+
+<ParamField path="action" type="string" required>
+  The operation to perform. One of: `"list"`, `"get"`, `"create"`, `"update"`, `"delete"`.
+</ParamField>
+
+<ParamField path="id" type="string">
+  Gist ID. Required for `get`, `update`, and `delete`. Obtain from a `list` or `create` response.
+</ParamField>
+
+<ParamField path="title" type="string">
+  Filename without the `cc--` prefix — the tool adds it automatically. Required for `create` and `update`. Example: `"device-map"` creates a file named `cc--device-map`.
+</ParamField>
+
+<ParamField path="content" type="string">
+  File content as a string. Required for `create` and `update`.
+</ParamField>
+
+<ParamField path="description" type="string">
+  Optional gist description. Used in `create`. Visible in the GitHub Gists UI.
+</ParamField>
+
+## Return value
+
+Return shape varies by action.
+
+<ResponseField name="success" type="boolean">
+  `true` on success.
+</ResponseField>
+
+**`list` response**
+
+<ResponseField name="count" type="number">
+  Number of matching gists found.
+</ResponseField>
+
+<ResponseField name="gists" type="array">
+  Array of matching gist summaries.
+  <Expandable title="properties">
+    <ResponseField name="id" type="string">Gist ID.</ResponseField>
+    <ResponseField name="description" type="string">Gist description.</ResponseField>
+    <ResponseField name="files" type="array">Array of filenames with the `cc--` prefix.</ResponseField>
+    <ResponseField name="created_at" type="string">ISO 8601 creation timestamp.</ResponseField>
+    <ResponseField name="updated_at" type="string">ISO 8601 last-updated timestamp.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+**`get` response**
+
+<ResponseField name="id" type="string">Gist ID.</ResponseField>
+<ResponseField name="description" type="string">Gist description.</ResponseField>
+<ResponseField name="created_at" type="string">ISO 8601 creation timestamp.</ResponseField>
+<ResponseField name="updated_at" type="string">ISO 8601 last-updated timestamp.</ResponseField>
+<ResponseField name="files" type="object">Key-value map of filename → file content string.</ResponseField>
+
+**`create` response**
+
+<ResponseField name="id" type="string">ID of the newly created gist.</ResponseField>
+<ResponseField name="description" type="string">Gist description.</ResponseField>
+<ResponseField name="file" type="string">Full filename including the `cc--` prefix.</ResponseField>
+<ResponseField name="created_at" type="string">ISO 8601 creation timestamp.</ResponseField>
+
+**`update` response**
+
+<ResponseField name="id" type="string">Gist ID.</ResponseField>
+<ResponseField name="file" type="string">Full filename including the `cc--` prefix.</ResponseField>
+<ResponseField name="updated_at" type="string">ISO 8601 last-updated timestamp.</ResponseField>
+
+**`delete` response**
+
+<ResponseField name="id" type="string">ID of the deleted gist.</ResponseField>
+<ResponseField name="deleted" type="boolean">`true` on successful deletion.</ResponseField>
+
+## Usage examples
+
+<CodeGroup>
+```json Save a device map
+{
+  "action": "create",
+  "title": "device-map",
+  "content": "homelab: home NAS and media server (linux)\nprod-server: production VPS running reacher (linux)\nwin-workstation: Windows dev machine",
+  "description": "Tailscale device map"
+}
+```
+
+```json List all knowledge base entries
+{
+  "action": "list"
+}
+```
+
+```json Read a specific entry
+{
+  "action": "get",
+  "id": "abc123def456"
+}
+```
+
+```json Update an existing entry
+{
+  "action": "update",
+  "id": "abc123def456",
+  "title": "device-map",
+  "content": "homelab: home NAS and media server (linux)\nprod-server: production VPS (linux) — reacher deployed here\nwin-workstation: Windows dev machine\nnew-rpi: Raspberry Pi 4 in the office"
+}
+```
+
+```json Delete an entry
+{
+  "action": "delete",
+  "id": "abc123def456"
+}
+```
+</CodeGroup>
+
+## Common use cases
+
+**Saving a device map after first-time setup**
+
+After running `tailscale_status` and probing SSH access for each device, save the results. Future sessions pick up the map without re-running discovery.
+
+**Storing project configs**
+
+Save deploy commands, environment-specific notes, or service endpoints so they're available in any conversation without re-pasting.
+
+**Persisting notes across conversations**
+
+Write observations, decisions, or action items during a session. Read them back at the start of the next session to restore context.
+
+**Bootstrapping with AGENT.MD**
+
+The `AGENT.MD` file included in Reacher is a Claude-readable guide that instructs Claude to run `gist_kb list` at the start of each session to check for existing device maps and configs. Drop `AGENT.MD` into a new conversation to trigger automatic context restoration.
+
+<Tip>
+Use descriptive `title` values like `"device-map"`, `"deploy-commands"`, or `"project-notes-reacher"` so `list` output is self-explanatory.
+</Tip>

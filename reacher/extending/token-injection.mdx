@@ -1,0 +1,300 @@
+---
+title: "Token injection"
+description: "How fetch_external injects API credentials per domain — tokens stay server-side, Claude never sees them."
+---
+
+Token injection is the mechanism that makes `fetch_external` work as a general-purpose API proxy. Instead of pasting tokens into every prompt, or building a dedicated connector for each API, you map a domain to an environment variable. When Claude calls `fetch_external` with a URL, Reacher looks up that domain, reads the token from the server environment, and injects it into the request automatically.
+
+Claude sends the URL. Reacher sends the credential. Claude never sees the token.
+
+## The problem it solves
+
+Without token injection, every API call would require one of:
+
+- Pasting the token into the Claude conversation (exposed in chat history, prompt injections possible)
+- Building a dedicated MCP tool per API (maintenance overhead, still needs token storage)
+- Storing tokens client-side in Claude Desktop config (not available in Claude.ai)
+
+Token injection moves credential management entirely to the server. You set a token once in `.env`. Every subsequent call to that domain gets it injected transparently.
+
+## How FETCH_EXTERNAL_TOKEN_MAP works
+
+`FETCH_EXTERNAL_TOKEN_MAP` is a JSON string in your `.env` that maps domain names to environment variable names:
+
+```bash .env
+FETCH_EXTERNAL_TOKEN_MAP={"api.github.com":"GITHUB_TOKEN","api.linear.app":"LINEAR_TOKEN"}
+GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxx
+LINEAR_TOKEN=lin_api_xxxxxxxxxxxxxxxxxxxx
+```
+
+The key is the exact hostname (no scheme, no path). The value is the name of the environment variable that holds the token — not the token itself.
+
+This indirection matters: you can rotate a token by updating a single env var, without touching the map. You can also share a token across multiple tools (`gist_kb` and `fetch_external` both use `GITHUB_TOKEN`) without duplicating it.
+
+## The token injection flow
+
+<Steps>
+
+<Step title="Claude calls fetch_external with a URL">
+
+Claude constructs a `fetch_external` call and sends it to the MCP server:
+
+```json
+{
+  "tool": "fetch_external",
+  "arguments": {
+    "url": "https://api.github.com/repos/thezem/reacher/pulls?state=open",
+    "method": "GET"
+  }
+}
+```
+
+No token, no credentials. Just a URL and a method.
+
+</Step>
+
+<Step title="Handler parses the hostname">
+
+The handler extracts the hostname from the URL using the built-in `URL` class:
+
+```javascript src/tools/fetch_external.js
+const parsedUrl = new URL(url)
+const hostname = parsedUrl.hostname
+// hostname = "api.github.com"
+```
+
+</Step>
+
+<Step title="Domain is checked against the allowlist">
+
+Before any token lookup, the domain is verified against `PROXY_ALLOWED_DOMAINS`:
+
+```javascript src/tools/fetch_external.js
+const allowedList = (allowedDomains || '')
+  .split(',')
+  .map(d => d.trim())
+  .filter(d => d)
+
+if (!allowedList.includes(hostname)) {
+  return {
+    success: false,
+    error: 'Domain not allowed',
+    url,
+    hostname,
+  }
+}
+```
+
+If the domain is not in the allowlist, the request is rejected immediately — no network call, no token lookup.
+
+</Step>
+
+<Step title="Hostname is looked up in the token map">
+
+The token map is loaded once at module initialization from `FETCH_EXTERNAL_TOKEN_MAP`:
+
+```javascript src/tools/fetch_external.js
+const TOKEN_INJECTION_MAP = JSON.parse(process.env.FETCH_EXTERNAL_TOKEN_MAP || '{}')
+```
+
+Then the hostname is looked up to find which env var holds its token:
+
+```javascript src/tools/fetch_external.js
+const tokenEnvVar = TOKEN_INJECTION_MAP[hostname]
+// tokenEnvVar = "GITHUB_TOKEN"
+```
+
+</Step>
+
+<Step title="Token is read and injected as a header">
+
+If the lookup finds a variable name, the token is read from `env` and injected into the request headers:
+
+```javascript src/tools/fetch_external.js
+const finalHeaders = { ...headers }
+
+if (tokenEnvVar && env[tokenEnvVar]) {
+  finalHeaders['Authorization'] = `Bearer ${env[tokenEnvVar]}`
+}
+```
+
+`env` here is `process.env` — the token value is only ever read server-side. It is never returned to Claude in any response.
+
+</Step>
+
+<Step title="Request is made with the injected header">
+
+The assembled request goes out with the full headers:
+
+```javascript src/tools/fetch_external.js
+const fetchOptions = {
+  method,
+  headers: finalHeaders,
+}
+
+if (body && ['POST', 'PUT', 'PATCH'].includes(method)) {
+  fetchOptions.body = JSON.stringify(body)
+  if (!finalHeaders['Content-Type']) {
+    finalHeaders['Content-Type'] = 'application/json'
+  }
+}
+
+const response = await fetch(url, fetchOptions)
+```
+
+The upstream API receives `Authorization: Bearer ghp_xxx` as if a human had set it manually.
+
+</Step>
+
+<Step title="Response is returned to Claude — token stripped">
+
+The response body, status, and headers are returned to Claude. The `Authorization` header is never echoed back — Claude only sees the API's response data, not the credential used to obtain it.
+
+The audit log also strips token values before writing, so they do not appear in `reacher-audit.log`.
+
+</Step>
+
+</Steps>
+
+## Custom header formats
+
+The default injection uses `Authorization: Bearer <token>`. Some APIs use different authentication schemes. You have two options:
+
+### Pass the header manually from Claude
+
+For one-off requests, Claude can set a custom `Authorization` header directly:
+
+```json
+{
+  "url": "https://api.example.com/resource",
+  "headers": {
+    "X-API-Key": "hardcoded-key-here"
+  }
+}
+```
+
+This works, but the value is visible in the conversation. Use it only for non-sensitive keys or during development.
+
+### Add a custom header format in the tool
+
+For APIs that use a scheme other than Bearer (Jira Basic auth, Linear `Authorization: <token>` without "Bearer", etc.), modify `fetch_external.js` to detect those domains and format the header accordingly.
+
+Here is an example that adds support for Jira's Base64 Basic auth:
+
+```javascript src/tools/fetch_external.js
+// After the existing Bearer injection block:
+const tokenEnvVar = TOKEN_INJECTION_MAP[hostname]
+if (tokenEnvVar && env[tokenEnvVar]) {
+  // Jira uses Basic auth: base64("email:token")
+  if (hostname.endsWith('atlassian.net')) {
+    const email = env.JIRA_EMAIL
+    const encoded = Buffer.from(`${email}:${env[tokenEnvVar]}`).toString('base64')
+    finalHeaders['Authorization'] = `Basic ${encoded}`
+  } else {
+    finalHeaders['Authorization'] = `Bearer ${env[tokenEnvVar]}`
+  }
+}
+```
+
+Add the corresponding env vars to `.env`:
+
+```bash .env
+PROXY_ALLOWED_DOMAINS=api.github.com,yourcompany.atlassian.net
+FETCH_EXTERNAL_TOKEN_MAP={"api.github.com":"GITHUB_TOKEN","yourcompany.atlassian.net":"JIRA_TOKEN"}
+GITHUB_TOKEN=ghp_xxx
+JIRA_TOKEN=your_jira_api_token
+JIRA_EMAIL=you@yourcompany.com
+```
+
+For `api-key` style headers (used by some services like Datadog or Algolia), the same pattern applies — change `Authorization: Bearer` to the appropriate header name and format:
+
+```javascript
+finalHeaders['DD-API-KEY'] = env[tokenEnvVar]
+```
+
+## Adding a new token mapping
+
+<Steps>
+
+<Step title="Add the domain to PROXY_ALLOWED_DOMAINS">
+
+```bash .env
+PROXY_ALLOWED_DOMAINS=api.github.com,api.linear.app
+```
+
+`fetch_external` will refuse to call any domain not in this list, regardless of what's in the token map. Both values must be set.
+
+</Step>
+
+<Step title="Add the domain-to-variable mapping in FETCH_EXTERNAL_TOKEN_MAP">
+
+```bash .env
+FETCH_EXTERNAL_TOKEN_MAP={"api.github.com":"GITHUB_TOKEN","api.linear.app":"LINEAR_TOKEN"}
+```
+
+The key is the exact hostname. The value is the name of the env var that holds the token — not the token itself.
+
+</Step>
+
+<Step title="Set the token value">
+
+```bash .env
+LINEAR_TOKEN=lin_api_xxxxxxxxxxxxxxxxxxxx
+```
+
+</Step>
+
+<Step title="Restart the server">
+
+The token map is loaded at startup (`JSON.parse(process.env.FETCH_EXTERNAL_TOKEN_MAP || '{}')`). Changes to `.env` require a restart to take effect.
+
+```bash
+docker restart reacher
+# or
+docker compose restart
+```
+
+</Step>
+
+<Step title="Verify the integration">
+
+Ask Claude to make a test call to the new API:
+
+> "Call the Linear API at https://api.linear.app/graphql with a query for my assigned issues."
+
+If the token is injected correctly, you'll get a valid API response. If it fails with a 401, check that the hostname in the token map exactly matches the hostname in the URL — including subdomains.
+
+</Step>
+
+</Steps>
+
+## PROXY_ALLOWED_DOMAINS and FETCH_EXTERNAL_TOKEN_MAP interaction
+
+These two settings are independent but complementary:
+
+| Scenario | PROXY_ALLOWED_DOMAINS | FETCH_EXTERNAL_TOKEN_MAP | Outcome |
+| --- | --- | --- | --- |
+| Domain in both | `api.github.com` | `{"api.github.com":"GITHUB_TOKEN"}` | Request made with injected token |
+| Domain in allowlist only | `api.github.com` | `{}` | Request made with no auth header |
+| Domain in map only | _(not listed)_ | `{"api.github.com":"GITHUB_TOKEN"}` | Request blocked — domain not allowed |
+| Domain in neither | _(not listed)_ | `{}` | Request blocked |
+
+A domain only needs a token map entry if the API requires authentication. Public APIs (e.g. a public REST endpoint with no auth) can appear in `PROXY_ALLOWED_DOMAINS` without a corresponding entry in `FETCH_EXTERNAL_TOKEN_MAP`.
+
+## Security properties
+
+<Note>
+The token injection design provides these guarantees:
+</Note>
+
+**Tokens never leave the server.** The token value is read from `process.env` inside the handler and written to a request header. It is never included in any MCP response, never logged to `reacher-audit.log`, and never visible in the Claude conversation.
+
+**Claude cannot exfiltrate tokens.** Claude can call `fetch_external` with any URL — but it cannot read what token was injected, because the handler does not return that information. The audit log confirms the call happened, not the credential value.
+
+**The allowlist prevents open-proxy abuse.** Even with a token map configured, `fetch_external` will not proxy requests to arbitrary domains. The domain check happens before the token lookup, so a misused call fails before any credentials are touched.
+
+**Token rotation requires no code changes.** Rotating a credential is a one-line `.env` update followed by a server restart. The token map does not change — only the value of the referenced env var does.
+
+<Warning>
+If a user-supplied `Authorization` header is passed in the `headers` argument, the injected token overwrites it. Claude cannot override token injection by passing a conflicting header — the server-side token always wins for mapped domains.
+</Warning>

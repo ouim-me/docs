@@ -1,0 +1,98 @@
+---
+title: "Dry-run mode"
+description: "Have ssh_exec report what it would execute without making any SSH connection."
+---
+
+Dry-run mode lets you verify your setup, test blocklist rules, and onboard new users — all without touching your infrastructure.
+
+<Note>
+Dry-run mode only affects `ssh_exec`. All other tools (`fetch_external`, `gist_kb`, `browser`, etc.) continue to execute normally when dry-run is enabled.
+</Note>
+
+---
+
+## How it works
+
+When dry-run is enabled, `ssh_exec` still evaluates all safety checks — the blocklist and directory allowlist run as normal. If the command passes those checks, instead of opening an SSH connection, the tool returns a response describing what it would have run:
+
+```json
+{
+  "success": true,
+  "dry_run": true,
+  "would_execute": "df -h /",
+  "hostname": "prod-server",
+  "user": "deploy"
+}
+```
+
+Blocked commands are still blocked in dry-run mode — they return the same `blocked: true` response regardless:
+
+```json
+{
+  "success": false,
+  "blocked": true,
+  "reason": "Command blocked by reacher config",
+  "matched_rule": "rm -rf",
+  "hostname": "prod-server",
+  "user": "deploy",
+  "command": "rm -rf /tmp/cache"
+}
+```
+
+---
+
+## Enabling dry-run
+
+<CodeGroup>
+
+```bash .env
+DRY_RUN=true
+```
+
+```yaml reacher.config.yaml
+dry_run: true
+```
+
+</CodeGroup>
+
+Set `DRY_RUN=true` (the exact string `"true"`) in your `.env` file, or set `dry_run: true` in `reacher.config.yaml`. Restart the server for the change to take effect.
+
+To disable, set `DRY_RUN=false` or remove the variable. The default is `false`.
+
+<Note>
+Environment variables take precedence over YAML values. If `DRY_RUN=true` is set in your environment, `dry_run: false` in the YAML file has no effect.
+</Note>
+
+---
+
+## Use cases
+
+**Validating your setup**
+
+Before granting Claude live SSH access, enable dry-run to confirm the server is running, Claude can reach it, and `ssh_exec` is receiving commands correctly. The `would_execute` response in Claude's output confirms the tool invocation path is working end to end.
+
+**Testing blocklist rules**
+
+When adding or changing entries in `ssh.blocked_commands`, dry-run lets you verify your rules without executing anything. Ask Claude to run the commands you want blocked — confirm the blocklist triggers — then disable dry-run.
+
+```bash
+# In .env
+DRY_RUN=true
+SSH_BLOCKED_COMMANDS=rm -rf /,shutdown,reboot,mkfs
+```
+
+**Onboarding new users**
+
+Share your Reacher instance with a new team member with dry-run enabled. They can explore and issue commands to learn the tool surface without any risk to live infrastructure. Disable dry-run when you're confident in the guardrails.
+
+**Auditing planned actions**
+
+If you want to review what Claude plans to do before committing, enable dry-run, run your workflow, check the audit log for the `would_execute` commands, then disable dry-run and re-run.
+
+---
+
+## Limitations
+
+- Dry-run only intercepts `ssh_exec`. It does not affect `fetch_external`, `gist_kb`, `github_search`, or `browser`.
+- There is no partial dry-run — it is all-or-nothing for the `ssh_exec` tool.
+- The dry-run flag is read at startup. Changing it requires a server restart.
