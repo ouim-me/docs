@@ -8,6 +8,9 @@
     "light": "#e08970",
     "dark": "#BD5D3A"
   },
+  "contextual": {
+    "options": ["copy", "claude", "grok", "mcp"]
+  },
 
   "background": {
     "color": {
