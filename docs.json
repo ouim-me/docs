@@ -25,35 +25,35 @@
         "groups": [
           {
             "group": "Get Started",
-            "pages": ["introduction", "quickstart", "connecting-to-claude"]
+            "pages": ["reacher/introduction", "reacher/quickstart", "reacher/connecting-to-claude"]
           },
           {
             "group": "Configuration",
-            "pages": ["configuration/environment-variables", "configuration/reacher-config", "configuration/domain-allowlist"]
+            "pages": ["reacher/configuration/environment-variables", "reacher/configuration/reacher-config", "reacher/configuration/domain-allowlist"]
           },
           {
             "group": "Tools",
             "pages": [
-              "tools/overview",
-              "tools/ssh-exec",
-              "tools/tailscale-status",
-              "tools/fetch-external",
-              "tools/github-search",
-              "tools/gist-kb",
-              "tools/browser"
+              "reacher/tools/overview",
+              "reacher/tools/ssh-exec",
+              "reacher/tools/tailscale-status",
+              "reacher/tools/fetch-external",
+              "reacher/tools/github-search",
+              "reacher/tools/gist-kb",
+              "reacher/tools/browser"
             ]
           },
           {
             "group": "Deployment",
-            "pages": ["deployment/docker", "deployment/bare-node", "deployment/easypanel", "deployment/railway-render"]
+            "pages": ["reacher/deployment/docker", "reacher/deployment/bare-node", "reacher/deployment/easypanel", "reacher/deployment/railway-render"]
           },
           {
             "group": "Operations",
-            "pages": ["operations/safety", "operations/audit-log", "operations/dry-run", "operations/troubleshooting"]
+            "pages": ["reacher/operations/safety", "reacher/operations/audit-log", "reacher/operations/dry-run", "reacher/operations/troubleshooting"]
           },
           {
             "group": "Extending",
-            "pages": ["extending/adding-tools", "extending/token-injection"]
+            "pages": ["reacher/extending/adding-tools", "reacher/extending/token-injection"]
           }
         ]
       },
