@@ -1,11 +1,28 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "name": "ouim / docs",
-  "theme": "mint",
+  "name": "ouim/docs",
+  "theme": "maple",
+  "favicon": "/favicon.svg",
   "colors": {
     "primary": "#DA7756",
     "light": "#e08970",
     "dark": "#BD5D3A"
+  },
+
+  "background": {
+    "color": {
+      "light": "#FAF9F5",
+
+      "dark": "#1a1814"
+    }
+  },
+  "font": {
+    "headings": {
+      "family": "Google Sans"
+    },
+    "body": {
+      "family": "Google Sans"
+    }
   },
   "navbar": {
     "primary": {
@@ -29,7 +46,11 @@
           },
           {
             "group": "Configuration",
-            "pages": ["reacher/configuration/environment-variables", "reacher/configuration/reacher-config", "reacher/configuration/domain-allowlist"]
+            "pages": [
+              "reacher/configuration/environment-variables",
+              "reacher/configuration/reacher-config",
+              "reacher/configuration/domain-allowlist"
+            ]
           },
           {
             "group": "Tools",
@@ -45,11 +66,21 @@
           },
           {
             "group": "Deployment",
-            "pages": ["reacher/deployment/docker", "reacher/deployment/bare-node", "reacher/deployment/easypanel", "reacher/deployment/railway-render"]
+            "pages": [
+              "reacher/deployment/docker",
+              "reacher/deployment/bare-node",
+              "reacher/deployment/easypanel",
+              "reacher/deployment/railway-render"
+            ]
           },
           {
             "group": "Operations",
-            "pages": ["reacher/operations/safety", "reacher/operations/audit-log", "reacher/operations/dry-run", "reacher/operations/troubleshooting"]
+            "pages": [
+              "reacher/operations/safety",
+              "reacher/operations/audit-log",
+              "reacher/operations/dry-run",
+              "reacher/operations/troubleshooting"
+            ]
           },
           {
             "group": "Extending",
