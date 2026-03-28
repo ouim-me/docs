@@ -11,7 +11,7 @@ The `useAuth` hook provides access to the current user's authentication state an
 ## Installation
 
 ```bash
-npm install simple-logto
+npm install @ouim/simple-logto
 ```
 
 ## Basic Usage
@@ -21,11 +21,11 @@ import { useAuth } from '@ouim/simple-logto'
 
 function MyComponent() {
   const { user, isLoadingUser, signIn, signOut } = useAuth()
-  
+
   if (isLoadingUser) {
     return <div>Loading...</div>
   }
-  
+
   if (user) {
     return (
       <div>
@@ -34,7 +34,7 @@ function MyComponent() {
       </div>
     )
   }
-  
+
   return <button onClick={() => signIn()}>Sign In</button>
 }
 ```
@@ -138,24 +138,9 @@ interface AuthContextType {
 </ParamField>
 
 <ParamField path="signIn" type="(callbackUrl?: string, usePopup?: boolean) => Promise<void>">
-  Function to initiate sign-in flow.
-  
-  - `callbackUrl`: Optional URL to redirect to after authentication
-  - `usePopup`: Override the `enablePopupSignIn` setting from `AuthProvider`
-  
-  ```tsx
-  // Default sign-in
-  await signIn()
-  
-  // With custom callback URL
-  await signIn('/dashboard')
-  
-  // Force popup mode
-  await signIn('/callback', true)
-  
-  // Force redirect mode
-  await signIn('/callback', false)
-  ```
+  Function to initiate sign-in flow. - `callbackUrl`: Optional URL to redirect to after authentication - `usePopup`: Override the
+  `enablePopupSignIn` setting from `AuthProvider` ```tsx // Default sign-in await signIn() // With custom callback URL await
+  signIn('/dashboard') // Force popup mode await signIn('/callback', true) // Force redirect mode await signIn('/callback', false) ```
 </ParamField>
 
 <ParamField path="signOut" type="(options?: { callbackUrl?: string; global?: boolean }) => Promise<void>">
@@ -180,12 +165,7 @@ interface AuthContextType {
 </ParamField>
 
 <ParamField path="refreshAuth" type="() => Promise<void>">
-  Function to manually refresh the authentication state.
-  
-  ```tsx
-  // Refresh user data
-  await refreshAuth()
-  ```
+  Function to manually refresh the authentication state. ```tsx // Refresh user data await refreshAuth() ```
 </ParamField>
 
 <ParamField path="enablePopupSignIn" type="boolean | undefined">
@@ -201,15 +181,15 @@ import { useAuth } from '@ouim/simple-logto'
 
 function UserProfile() {
   const { user, isLoadingUser } = useAuth()
-  
+
   if (isLoadingUser) {
     return <div>Loading user...</div>
   }
-  
+
   if (!user) {
     return <div>Please sign in</div>
   }
-  
+
   return (
     <div>
       <img src={user.avatar} alt={user.name} />
@@ -229,9 +209,9 @@ import { useAuth } from '@ouim/simple-logto'
 export default function DashboardPage() {
   const { user } = useAuth({
     middleware: 'auth',
-    redirectTo: '/login'
+    redirectTo: '/login',
   })
-  
+
   // No need to check if user exists - middleware handles it
   return (
     <div>
@@ -250,9 +230,9 @@ import { useAuth } from '@ouim/simple-logto'
 export default function LoginPage() {
   const { signIn } = useAuth({
     middleware: 'guest',
-    redirectIfAuthenticated: '/dashboard'
+    redirectIfAuthenticated: '/dashboard',
   })
-  
+
   return (
     <div>
       <h1>Sign In</h1>
@@ -269,7 +249,7 @@ import { useAuth } from '@ouim/simple-logto'
 
 function SignInButton() {
   const { signIn, isLoadingUser } = useAuth()
-  
+
   return (
     <button
       onClick={() => signIn('/dashboard', true)} // Use popup
@@ -288,13 +268,13 @@ import { useAuth } from '@ouim/simple-logto'
 
 function SignOutButton() {
   const { signOut } = useAuth()
-  
+
   const handleSignOut = async () => {
     if (confirm('Are you sure you want to sign out?')) {
       await signOut({ callbackUrl: '/' })
     }
   }
-  
+
   return <button onClick={handleSignOut}>Sign Out</button>
 }
 ```
@@ -306,7 +286,7 @@ import { useAuth } from '@ouim/simple-logto'
 
 function Navigation() {
   const { user, signIn, signOut } = useAuth()
-  
+
   return (
     <nav>
       <a href="/">Home</a>
@@ -331,15 +311,15 @@ import { useAuth } from '@ouim/simple-logto'
 
 function ProfilePage() {
   const { user, refreshAuth } = useAuth({ middleware: 'auth' })
-  
+
   const handleProfileUpdate = async () => {
     // Update profile via API
     await updateProfile({ name: 'New Name' })
-    
+
     // Refresh auth state to get updated user data
     await refreshAuth()
   }
-  
+
   return (
     <div>
       <h1>{user?.name}</h1>
@@ -356,7 +336,7 @@ import { useAuth } from '@ouim/simple-logto'
 
 function App() {
   const { user, isLoadingUser, signIn, signOut } = useAuth()
-  
+
   return (
     <div>
       {isLoadingUser ? (
@@ -382,7 +362,7 @@ Protects routes that require authentication:
 ```tsx
 const { user } = useAuth({
   middleware: 'auth',
-  redirectTo: '/login'
+  redirectTo: '/login',
 })
 
 // If user is NOT authenticated → redirects to '/login'
@@ -396,7 +376,7 @@ Protects routes that should only be accessible to unauthenticated users:
 ```tsx
 const { user } = useAuth({
   middleware: 'guest',
-  redirectIfAuthenticated: '/dashboard'
+  redirectIfAuthenticated: '/dashboard',
 })
 
 // If user IS authenticated → redirects to '/dashboard'
@@ -415,13 +395,14 @@ const { user } = useAuth()
 ## SSR Considerations
 
 <Info>
-The hook waits for client-side mounting and `isLoadingUser` to be `false` before performing middleware redirects, preventing hydration mismatches.
+  The hook waits for client-side mounting and `isLoadingUser` to be `false` before performing middleware redirects, preventing hydration
+  mismatches.
 </Info>
 
 ```tsx
 useEffect(() => {
   if (isLoadingUser) return // Wait for loading to complete
-  
+
   // Perform middleware checks and redirects
 }, [user, isLoadingUser, memoizedOptions])
 ```
@@ -432,18 +413,16 @@ useEffect(() => {
   <Accordion title="Use middleware for route protection">
     Instead of manually checking `user` and redirecting, use the built-in `middleware` option for cleaner code.
   </Accordion>
-  
+
   <Accordion title="Always check loading state">
     Always handle the `isLoadingUser` state to prevent UI flashing and provide better UX.
   </Accordion>
-  
+
   <Accordion title="Memoize options object">
     The hook internally memoizes options, but you can also wrap your options in `useMemo` if they depend on other state.
   </Accordion>
-  
-  <Accordion title="Handle sign-out errors">
-    Wrap `signOut` calls in try-catch blocks to handle potential errors gracefully.
-  </Accordion>
+
+  <Accordion title="Handle sign-out errors">Wrap `signOut` calls in try-catch blocks to handle potential errors gracefully.</Accordion>
 </AccordionGroup>
 
 ## TypeScript Support
@@ -455,7 +434,7 @@ import { useAuth, type AuthOptions, type AuthContextType } from '@ouim/simple-lo
 
 const options: AuthOptions = {
   middleware: 'auth',
-  redirectTo: '/login'
+  redirectTo: '/login',
 }
 
 const auth: AuthContextType = useAuth(options)
@@ -463,19 +442,15 @@ const auth: AuthContextType = useAuth(options)
 
 ## Troubleshooting
 
-<Warning>
-**"useAuthContext must be used within an AuthProvider"**: Ensure your component is wrapped with `AuthProvider`.
-</Warning>
+<Warning>**"useAuthContext must be used within an AuthProvider"**: Ensure your component is wrapped with `AuthProvider`.</Warning>
 
 <Warning>
-**Infinite redirect loop**: Check that `redirectTo` and `redirectIfAuthenticated` point to different routes and don't conflict.
+  **Infinite redirect loop**: Check that `redirectTo` and `redirectIfAuthenticated` point to different routes and don't conflict.
 </Warning>
 
 <Check>
-The hook automatically refreshes auth state when:
-- Window regains focus
-- Storage events occur (cross-tab sync)
-- Custom `auth-state-changed` events are dispatched
+  The hook automatically refreshes auth state when: - Window regains focus - Storage events occur (cross-tab sync) - Custom
+  `auth-state-changed` events are dispatched
 </Check>
 
 ## Related
@@ -484,15 +459,15 @@ The hook automatically refreshes auth state when:
   <Card title="AuthProvider" icon="shield-check" href="/frontend/auth-provider">
     Configure authentication provider
   </Card>
-  
+
   <Card title="Route Protection" icon="lock" href="/frontend/route-protection">
     Advanced route protection patterns
   </Card>
-  
+
   <Card title="UserCenter" icon="user" href="/frontend/user-center">
     Pre-built user menu component
   </Card>
-  
+
   <Card title="CallbackPage" icon="arrow-right-to-bracket" href="/frontend/callback-page">
     Handle authentication callbacks
   </Card>

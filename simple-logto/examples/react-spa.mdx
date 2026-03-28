@@ -12,8 +12,9 @@ This example demonstrates how to build a complete React SPA with authentication 
     First, install Simple Logto and its peer dependencies:
 
     ```bash
-    npm install simple-logto @logto/react
+    npm install @ouim/simple-logto @logto/react
     ```
+
   </Step>
 
   <Step title="Configure Logto Provider">
@@ -53,6 +54,7 @@ This example demonstrates how to build a complete React SPA with authentication 
 
     export default App
     ```
+
   </Step>
 
   <Step title="Create Home Page">
@@ -105,7 +107,7 @@ This example demonstrates how to build a complete React SPA with authentication 
               <p className="text-xl text-gray-600 mb-8">
                 A simplified authentication solution for React applications
               </p>
-              
+
               {user ? (
                 <div>
                   <p className="text-lg mb-4">
@@ -132,6 +134,7 @@ This example demonstrates how to build a complete React SPA with authentication 
       )
     }
     ```
+
   </Step>
 
   <Step title="Create Protected Dashboard">
@@ -179,7 +182,7 @@ This example demonstrates how to build a complete React SPA with authentication 
           <main className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
             <div className="bg-white shadow rounded-lg p-6">
               <h2 className="text-2xl font-bold mb-4">Dashboard</h2>
-              
+
               <div className="space-y-4">
                 <div className="border-l-4 border-blue-500 pl-4">
                   <h3 className="font-semibold text-gray-900">User Information</h3>
@@ -212,6 +215,7 @@ This example demonstrates how to build a complete React SPA with authentication 
       )
     }
     ```
+
   </Step>
 
   <Step title="Create Callback and Sign-In Pages">
@@ -243,6 +247,7 @@ This example demonstrates how to build a complete React SPA with authentication 
       }
       ```
     </CodeGroup>
+
   </Step>
 </Steps>
 

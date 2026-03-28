@@ -12,8 +12,9 @@ This example demonstrates how to integrate Simple Logto into a Next.js applicati
     Install Simple Logto and required dependencies:
 
     ```bash
-    npm install simple-logto @logto/react
+    npm install @ouim/simple-logto @logto/react
     ```
+
   </Step>
 
   <Step title="Create Root Layout">
@@ -48,6 +49,7 @@ This example demonstrates how to integrate Simple Logto into a Next.js applicati
       )
     }
     ```
+
   </Step>
 
   <Step title="Create Home Page">
@@ -137,6 +139,7 @@ This example demonstrates how to integrate Simple Logto into a Next.js applicati
       )
     }
     ```
+
   </Step>
 
   <Step title="Create Protected Dashboard">
@@ -238,6 +241,7 @@ This example demonstrates how to integrate Simple Logto into a Next.js applicati
       )
     }
     ```
+
   </Step>
 
   <Step title="Create API Route with Server-Side Auth">
@@ -270,6 +274,7 @@ This example demonstrates how to integrate Simple Logto into a Next.js applicati
       })
     }
     ```
+
   </Step>
 
   <Step title="Add Authentication Pages">
@@ -305,6 +310,7 @@ This example demonstrates how to integrate Simple Logto into a Next.js applicati
       }
       ```
     </CodeGroup>
+
   </Step>
 
   <Step title="Configure Environment Variables">
@@ -320,6 +326,7 @@ This example demonstrates how to integrate Simple Logto into a Next.js applicati
     LOGTO_ENDPOINT=https://your-tenant.logto.app
     LOGTO_API_RESOURCE=https://api.yourapp.com
     ```
+
   </Step>
 </Steps>
 
@@ -352,6 +359,7 @@ Simple Logto supports server-side authentication for API routes and middleware:
       })
     }
     ```
+
   </Tab>
 
   <Tab title="Middleware">
@@ -383,6 +391,7 @@ Simple Logto supports server-side authentication for API routes and middleware:
       matcher: '/api/protected/:path*',
     }
     ```
+
   </Tab>
 </Tabs>
 

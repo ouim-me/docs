@@ -11,7 +11,7 @@ The `CallbackPage` component handles the authentication callback after users are
 ## Installation
 
 ```bash
-npm install simple-logto
+npm install @ouim/simple-logto
 ```
 
 ## Basic Usage
@@ -29,17 +29,13 @@ export default function Callback() {
 ## Props
 
 <ParamField path="className" type="string">
-  Additional CSS classes to apply to the container element.
-  
-  ```tsx
+  Additional CSS classes to apply to the container element. ```tsx
   <CallbackPage className="bg-gray-50" />
   ```
 </ParamField>
 
 <ParamField path="loadingComponent" type="React.ReactNode">
-  Custom component to display while processing authentication.
-  
-  ```tsx
+  Custom component to display while processing authentication. ```tsx
   <CallbackPage
     loadingComponent={
       <div className="flex items-center gap-2">
@@ -52,9 +48,7 @@ export default function Callback() {
 </ParamField>
 
 <ParamField path="successComponent" type="React.ReactNode">
-  Custom component to display after successful authentication.
-  
-  ```tsx
+  Custom component to display after successful authentication. ```tsx
   <CallbackPage
     successComponent={
       <div className="text-center">
@@ -67,9 +61,7 @@ export default function Callback() {
 </ParamField>
 
 <ParamField path="onSuccess" type="() => void">
-  Callback function executed after successful authentication, before redirect/close.
-  
-  ```tsx
+  Callback function executed after successful authentication, before redirect/close. ```tsx
   <CallbackPage
     onSuccess={() => {
       console.log('Authentication successful!')
@@ -80,11 +72,9 @@ export default function Callback() {
 </ParamField>
 
 <ParamField path="onError" type="(error: Error) => void">
-  Callback function executed if authentication fails.
-  
-  ```tsx
+  Callback function executed if authentication fails. ```tsx
   <CallbackPage
-    onError={(error) => {
+    onError={error => {
       console.error('Auth failed:', error)
       // Show error message, redirect to error page, etc.
     }}
@@ -108,9 +98,7 @@ The `CallbackPage` component:
 The component automatically detects whether it's handling a popup or redirect flow:
 
 ```typescript
-const isPopup = 
-  (window.opener && window.opener !== window) || 
-  sessionStorage.getItem('simple_logto_popup_flow') === 'true'
+const isPopup = (window.opener && window.opener !== window) || sessionStorage.getItem('simple_logto_popup_flow') === 'true'
 ```
 
 - Checks if the window has an `opener` (parent window)
@@ -127,10 +115,7 @@ For popup-based authentication:
 
 ```typescript
 // Sends message to parent
-window.opener.postMessage(
-  { type: 'SIGNIN_SUCCESS' }, 
-  window.location.origin
-)
+window.opener.postMessage({ type: 'SIGNIN_SUCCESS' }, window.location.origin)
 
 // Closes popup after small delay
 setTimeout(() => {
@@ -146,9 +131,7 @@ If `window.opener` is unavailable (some browsers clear it), falls back to localS
 localStorage.setItem('simple_logto_signin_complete', Date.now().toString())
 ```
 
-<Info>
-The parent window listens for both `postMessage` and `localStorage` events to handle popup completion.
-</Info>
+<Info>The parent window listens for both `postMessage` and `localStorage` events to handle popup completion.</Info>
 
 ## Redirect Flow
 
@@ -205,7 +188,7 @@ import { useRouter } from 'next/navigation'
 
 export default function Callback() {
   const router = useRouter()
-  
+
   return (
     <CallbackPage
       onSuccess={() => {
@@ -213,11 +196,11 @@ export default function Callback() {
         if (typeof window !== 'undefined' && window.analytics) {
           window.analytics.track('User Signed In', {
             method: 'logto',
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
           })
         }
       }}
-      onError={(error) => {
+      onError={error => {
         console.error('Authentication error:', error)
         // Redirect to error page
         router.push('/auth/error')
@@ -261,10 +244,8 @@ export default function Callback() {
     <CallbackPage
       onSuccess={() => {
         // Check if this is popup flow
-        const isPopup = 
-          (window.opener && window.opener !== window) ||
-          sessionStorage.getItem('simple_logto_popup_flow') === 'true'
-        
+        const isPopup = (window.opener && window.opener !== window) || sessionStorage.getItem('simple_logto_popup_flow') === 'true'
+
         if (!isPopup) {
           // Custom redirect for non-popup flow
           window.location.href = '/dashboard'
@@ -312,14 +293,14 @@ export default function SignIn() {
   const { signIn } = useAuth()
   const searchParams = useSearchParams()
   const isPopup = searchParams.get('popup') === 'true'
-  
+
   useEffect(() => {
     if (isPopup) {
       sessionStorage.setItem('simple_logto_popup_flow', 'true')
     }
     signIn('/callback')
   }, [signIn, isPopup])
-  
+
   return <div>Redirecting to sign in...</div>
 }
 ```
@@ -340,6 +321,7 @@ try {
 ```
 
 Common errors:
+
 - Invalid authorization code
 - Token exchange failure
 - Network errors
@@ -351,19 +333,17 @@ Common errors:
   <Accordion title="Create a dedicated route">
     Always use a dedicated route like `/callback` or `/auth/callback` for handling authentication callbacks.
   </Accordion>
-  
+
   <Accordion title="Configure Logto redirect URI">
     Make sure your Logto application's redirect URI matches your callback route exactly.
   </Accordion>
-  
+
   <Accordion title="Handle both flows">
     The component automatically handles both popup and redirect flows - no additional configuration needed.
   </Accordion>
-  
-  <Accordion title="Add error tracking">
-    Use the `onError` callback to track authentication failures in your monitoring system.
-  </Accordion>
-  
+
+  <Accordion title="Add error tracking">Use the `onError` callback to track authentication failures in your monitoring system.</Accordion>
+
   <Accordion title="Customize user experience">
     Provide custom loading and success components that match your application's design.
   </Accordion>
@@ -386,20 +366,14 @@ http://localhost:3000/callback
 ## Troubleshooting
 
 <Warning>
-**Popup doesn't close**: Ensure your sign-in page sets the `simple_logto_popup_flow` sessionStorage flag when `?popup=true` is in the URL.
+  **Popup doesn't close**: Ensure your sign-in page sets the `simple_logto_popup_flow` sessionStorage flag when `?popup=true` is in the URL.
 </Warning>
 
-<Warning>
-**Infinite redirect loop**: Check that your Logto redirect URI exactly matches your callback route.
-</Warning>
+<Warning>**Infinite redirect loop**: Check that your Logto redirect URI exactly matches your callback route.</Warning>
 
-<Warning>
-**CORS errors**: Ensure your Logto application's allowed origins include your application's domain.
-</Warning>
+<Warning>**CORS errors**: Ensure your Logto application's allowed origins include your application's domain.</Warning>
 
-<Check>
-The component automatically cleans up the `simple_logto_popup_flow` flag after successful authentication.
-</Check>
+<Check>The component automatically cleans up the `simple_logto_popup_flow` flag after successful authentication.</Check>
 
 ## Related
 
@@ -407,15 +381,15 @@ The component automatically cleans up the `simple_logto_popup_flow` flag after s
   <Card title="AuthProvider" icon="shield-check" href="/frontend/auth-provider">
     Configure authentication provider
   </Card>
-  
+
   <Card title="useAuth Hook" icon="hook" href="/frontend/use-auth">
     Access sign-in functionality
   </Card>
-  
+
   <Card title="UserCenter" icon="user" href="/frontend/user-center">
     User menu with sign-in button
   </Card>
-  
+
   <Card title="Route Protection" icon="lock" href="/frontend/route-protection">
     Protect authenticated routes
   </Card>

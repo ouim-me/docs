@@ -1,7 +1,7 @@
 {
   "$schema": "https://mintlify.com/docs.json",
   "name": "ouim/docs",
-  "theme": "maple",
+  "theme": "palm",
   "favicon": "/logo.svg",
   "colors": {
     "primary": "#DA7756",
@@ -19,8 +19,8 @@
       "dark": "#1a1814"
     }
   },
-  "font": {
-    "headings": {
+  "fonts": {
+    "heading": {
       "family": "Google Sans"
     },
     "body": {
