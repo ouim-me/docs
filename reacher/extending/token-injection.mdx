@@ -1,6 +1,7 @@
 ---
 title: "Token injection"
 description: "How fetch_external injects API credentials per domain — tokens stay server-side, Claude never sees them."
+icon: "lock"
 ---
 
 Token injection is the mechanism that makes `fetch_external` work as a general-purpose API proxy. Instead of pasting tokens into every prompt, or building a dedicated connector for each API, you map a domain to an environment variable. When Claude calls `fetch_external` with a URL, Reacher looks up that domain, reads the token from the server environment, and injects it into the request automatically.

@@ -1,6 +1,7 @@
 ---
 title: "ssh_exec"
 description: "Execute shell commands on remote Tailscale devices — no manual SSH key setup required."
+icon: "terminal"
 ---
 
 `ssh_exec` runs a shell command on a remote device over Tailscale SSH. It uses the Tailscale hostname directly — no IP addresses, no manual `known_hosts` management. The server spawns a real `ssh` process using a dedicated key mounted at `/root/.ssh/reacher-key`.
