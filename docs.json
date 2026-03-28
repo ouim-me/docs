@@ -128,6 +128,22 @@
           {
             "group": "Examples",
             "pages": ["simple-logto/examples/react-spa", "simple-logto/examples/nextjs-app", "simple-logto/examples/protected-routes"]
+          },
+          {
+            "group": "API Reference",
+            "pages": [
+              "simple-logto/api/components/auth-provider",
+              "simple-logto/api/components/callback-page",
+              "simple-logto/api/components/sign-in-page",
+              "simple-logto/api/hooks/use-auth",
+              "simple-logto/api/backend/verify-auth",
+              "simple-logto/api/backend/verify-next-auth",
+              "simple-logto/api/backend/create-express-auth-middleware",
+              "simple-logto/api/types/backend-types",
+              "simple-logto/api/types/frontend-types",
+              "simple-logto/api/utilities/bundler-config",
+              "simple-logto/api/utilities/cookie-utils"
+            ]
           }
         ]
       }

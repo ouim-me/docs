@@ -29,13 +29,17 @@ export default function Callback() {
 ## Props
 
 <ParamField path="className" type="string">
-  Additional CSS classes to apply to the container element. ```tsx
+  Additional CSS classes to apply to the container element.
+
+  ```tsx
   <CallbackPage className="bg-gray-50" />
   ```
 </ParamField>
 
 <ParamField path="loadingComponent" type="React.ReactNode">
-  Custom component to display while processing authentication. ```tsx
+  Custom component to display while processing authentication.
+
+  ```tsx
   <CallbackPage
     loadingComponent={
       <div className="flex items-center gap-2">
@@ -48,7 +52,9 @@ export default function Callback() {
 </ParamField>
 
 <ParamField path="successComponent" type="React.ReactNode">
-  Custom component to display after successful authentication. ```tsx
+  Custom component to display after successful authentication.
+
+  ```tsx
   <CallbackPage
     successComponent={
       <div className="text-center">
@@ -61,7 +67,9 @@ export default function Callback() {
 </ParamField>
 
 <ParamField path="onSuccess" type="() => void">
-  Callback function executed after successful authentication, before redirect/close. ```tsx
+  Callback function executed after successful authentication, before redirect/close.
+
+  ```tsx
   <CallbackPage
     onSuccess={() => {
       console.log('Authentication successful!')
@@ -72,7 +80,9 @@ export default function Callback() {
 </ParamField>
 
 <ParamField path="onError" type="(error: Error) => void">
-  Callback function executed if authentication fails. ```tsx
+  Callback function executed if authentication fails.
+
+  ```tsx
   <CallbackPage
     onError={error => {
       console.error('Auth failed:', error)
