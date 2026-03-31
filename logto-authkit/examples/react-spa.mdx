@@ -1,0 +1,282 @@
+---
+title: 'React SPA Example'
+description: 'Complete React single-page application example with logto-authkit'
+---
+
+This example demonstrates how to build a complete React SPA with authentication using logto-authkit. It includes user sign-in, protected routes, and user profile management.
+
+## Complete Example
+
+<Steps>
+  <Step title="Install Dependencies">
+    First, install logto-authkit and its peer dependencies:
+
+    ```bash
+    npm install @ouim/logto-authkit @logto/react
+    ```
+
+  </Step>
+
+  <Step title="Configure Logto Provider">
+    Wrap your app with the `AuthProvider` to enable authentication throughout your application:
+
+    ```tsx App.tsx
+    import { AuthProvider } from '@ouim/logto-authkit'
+    import { BrowserRouter, Routes, Route } from 'react-router-dom'
+    import Home from './pages/Home'
+    import Dashboard from './pages/Dashboard'
+    import CallbackPage from './pages/Callback'
+    import SignIn from './pages/SignIn'
+
+    function App() {
+      return (
+        <AuthProvider
+          config={{
+            endpoint: 'https://your-tenant.logto.app',
+            appId: 'your-app-id',
+            resources: ['https://api.yourapp.com'],
+            scopes: ['openid', 'profile', 'email'],
+          }}
+          callbackUrl="http://localhost:3000/callback"
+          enablePopupSignIn={true}
+        >
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/callback" element={<CallbackPage />} />
+              <Route path="/signin" element={<SignIn />} />
+            </Routes>
+          </BrowserRouter>
+        </AuthProvider>
+      )
+    }
+
+    export default App
+    ```
+
+  </Step>
+
+  <Step title="Create Home Page">
+    Build a landing page with sign-in functionality:
+
+    ```tsx pages/Home.tsx
+    import { useAuth, UserCenter } from '@ouim/logto-authkit'
+    import { useNavigate } from 'react-router-dom'
+
+    export default function Home() {
+      const { user, isLoadingUser, signIn } = useAuth()
+      const navigate = useNavigate()
+
+      if (isLoadingUser) {
+        return (
+          <div className="flex items-center justify-center min-h-screen">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+          </div>
+        )
+      }
+
+      return (
+        <div className="min-h-screen bg-gray-50">
+          <nav className="bg-white shadow">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="flex justify-between h-16">
+                <div className="flex items-center">
+                  <h1 className="text-xl font-bold">My App</h1>
+                </div>
+                <div className="flex items-center">
+                  <UserCenter
+                    additionalPages={[
+                      {
+                        link: '/dashboard',
+                        text: 'Dashboard',
+                        icon: <span>📊</span>,
+                      },
+                    ]}
+                  />
+                </div>
+              </div>
+            </div>
+          </nav>
+
+          <main className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+            <div className="text-center">
+              <h2 className="text-4xl font-bold text-gray-900 mb-4">
+                Welcome to logto-authkit
+              </h2>
+              <p className="text-xl text-gray-600 mb-8">
+                A simplified authentication solution for React applications
+              </p>
+
+              {user ? (
+                <div>
+                  <p className="text-lg mb-4">
+                    Hello, {user.name || user.email}!
+                  </p>
+                  <button
+                    onClick={() => navigate('/dashboard')}
+                    className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700"
+                  >
+                    Go to Dashboard
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => signIn()}
+                  className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700"
+                >
+                  Sign In
+                </button>
+              )}
+            </div>
+          </main>
+        </div>
+      )
+    }
+    ```
+
+  </Step>
+
+  <Step title="Create Protected Dashboard">
+    Build a protected dashboard page that requires authentication:
+
+    ```tsx pages/Dashboard.tsx
+    import { useAuth, UserCenter } from '@ouim/logto-authkit'
+    import { useNavigate } from 'react-router-dom'
+
+    export default function Dashboard() {
+      const { user, isLoadingUser } = useAuth({
+        middleware: 'auth',
+        redirectTo: '/signin',
+      })
+      const navigate = useNavigate()
+
+      if (isLoadingUser) {
+        return (
+          <div className="flex items-center justify-center min-h-screen">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+          </div>
+        )
+      }
+
+      return (
+        <div className="min-h-screen bg-gray-50">
+          <nav className="bg-white shadow">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="flex justify-between h-16">
+                <div className="flex items-center">
+                  <button
+                    onClick={() => navigate('/')}
+                    className="text-xl font-bold hover:text-blue-600"
+                  >
+                    My App
+                  </button>
+                </div>
+                <div className="flex items-center">
+                  <UserCenter />
+                </div>
+              </div>
+            </div>
+          </nav>
+
+          <main className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+            <div className="bg-white shadow rounded-lg p-6">
+              <h2 className="text-2xl font-bold mb-4">Dashboard</h2>
+
+              <div className="space-y-4">
+                <div className="border-l-4 border-blue-500 pl-4">
+                  <h3 className="font-semibold text-gray-900">User Information</h3>
+                  <dl className="mt-2 space-y-2">
+                    <div>
+                      <dt className="text-sm text-gray-500">ID</dt>
+                      <dd className="text-sm font-medium text-gray-900">{user?.id}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-sm text-gray-500">Name</dt>
+                      <dd className="text-sm font-medium text-gray-900">{user?.name || 'N/A'}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-sm text-gray-500">Email</dt>
+                      <dd className="text-sm font-medium text-gray-900">{user?.email || 'N/A'}</dd>
+                    </div>
+                  </dl>
+                </div>
+
+                <div className="border-l-4 border-green-500 pl-4">
+                  <h3 className="font-semibold text-gray-900">Status</h3>
+                  <p className="text-sm text-gray-600 mt-2">
+                    You are successfully authenticated and can access protected resources.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </main>
+        </div>
+      )
+    }
+    ```
+
+  </Step>
+
+  <Step title="Create Callback and Sign-In Pages">
+    Add the required authentication pages:
+
+    <CodeGroup>
+      ```tsx pages/Callback.tsx
+      import { CallbackPage } from '@ouim/logto-authkit'
+
+      export default function Callback() {
+        return (
+          <CallbackPage
+            onSuccess={() => {
+              console.log('Authentication successful!')
+            }}
+            onError={(error) => {
+              console.error('Authentication error:', error)
+            }}
+          />
+        )
+      }
+      ```
+
+      ```tsx pages/SignIn.tsx
+      import { SignInPage } from '@ouim/logto-authkit'
+
+      export default function SignIn() {
+        return <SignInPage />
+      }
+      ```
+    </CodeGroup>
+
+  </Step>
+</Steps>
+
+## Features Demonstrated
+
+This example showcases:
+
+- **Authentication Provider**: Global auth state management
+- **Popup Sign-In**: Optional popup-based authentication flow
+- **User Center Component**: Pre-built user menu with avatar and sign-out
+- **Protected Routes**: Automatic redirection for unauthenticated users
+- **Loading States**: Proper handling of authentication loading states
+- **User Profile Display**: Accessing and displaying user information
+
+## Running the Example
+
+```bash
+npm run dev
+```
+
+Visit `http://localhost:3000` to see the app in action.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Protected Routes" icon="lock" href="/logto-authkit/examples/protected-routes">
+    Learn advanced patterns for protecting routes
+  </Card>
+  <Card title="Next.js Example" icon="react" href="/logto-authkit/examples/nextjs-app">
+    See how to use logto-authkit with Next.js
+  </Card>
+</CardGroup>

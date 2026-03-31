@@ -1,0 +1,148 @@
+---
+title: SignInPage
+description: A page component that initiates the authentication flow with Logto.
+---
+
+## Overview
+
+The `SignInPage` component is a page-level component that automatically initiates the Logto authentication flow when rendered. It handles both standard redirects and popup-based authentication.
+
+## Props
+
+This component does not accept any props. All configuration is managed through the `AuthProvider`.
+
+## Usage
+
+### Basic Setup
+
+Create a sign-in route in your application (e.g., `/signin` or `/login`):
+
+```tsx
+import { SignInPage } from '@ouim/logto-authkit'
+
+function SignIn() {
+  return <SignInPage />
+}
+
+export default SignIn
+```
+
+### Next.js App Router
+
+```tsx
+// app/signin/page.tsx
+import { SignInPage } from '@ouim/logto-authkit'
+
+export default function SignIn() {
+  return <SignInPage />
+}
+```
+
+### Next.js Pages Router
+
+```tsx
+// pages/signin.tsx
+import { SignInPage } from '@ouim/logto-authkit'
+
+function SignIn() {
+  return <SignInPage />
+}
+
+export default SignIn
+```
+
+### React Router
+
+```tsx
+import { Routes, Route } from 'react-router-dom'
+import { SignInPage } from '@ouim/logto-authkit'
+
+function App() {
+  return (
+    <Routes>
+      <Route path="/signin" element={<SignInPage />} />
+    </Routes>
+  )
+}
+```
+
+## Behavior
+
+### Standard Flow
+
+1. Component checks if user is already authenticated
+2. If not authenticated, initiates Logto sign-in flow
+3. User is redirected to Logto's authentication page
+4. After authentication, user is redirected to the callback URL
+
+### Popup Flow
+
+When popup sign-in is enabled (`enablePopupSignIn={true}` in `AuthProvider`):
+
+1. Component detects it's opened in a popup window (via URL param `?popup=true`)
+2. Sets `simple_logto_popup_flow` flag in sessionStorage
+3. Initiates sign-in with popup disabled to prevent nested popups
+4. After authentication, notifies parent window and closes popup
+
+### Already Authenticated
+
+If user is already signed in:
+
+**Standard window:**
+- Redirects to home page (`/`) if not already there
+- Reloads the page if already on home page
+
+**Popup window:**
+- Sends `SIGNIN_COMPLETE` message to parent window
+- Falls back to localStorage if `postMessage` fails
+- Closes the popup after 100ms delay
+
+### Loading State
+
+While checking authentication state:
+- Displays a centered loading spinner
+- Prevents any sign-in actions until state is determined
+
+## Features
+
+- **Auto-Redirect**: Automatically initiates sign-in without user interaction
+- **Popup Detection**: Intelligently detects and handles popup authentication
+- **State Persistence**: Uses sessionStorage to maintain popup state across redirects
+- **Fallback Messaging**: Multiple communication methods between popup and parent window
+- **Prevents Nested Popups**: Disables popup mode when already in a popup
+- **Loading Feedback**: Built-in loading state while determining auth status
+
+## Implementation Details
+
+### Popup Detection
+
+The component detects popup mode through:
+
+1. **URL Parameter**: `?popup=true` query string
+2. **SessionStorage**: `simple_logto_popup_flow` flag (persists across redirects)
+3. **Window Opener**: Presence of `window.opener` reference
+
+### Parent Window Communication
+
+When in popup mode, the component communicates with the parent window via:
+
+1. **Primary**: `window.opener.postMessage()` with same-origin check
+2. **Fallback**: `localStorage.setItem('simple_logto_signin_complete')` for broadcast
+
+### Sign-In Prevention
+
+The component uses a ref (`signInInProgress`) to prevent multiple simultaneous sign-in attempts.
+
+## Notes
+
+- The component must be used within an `AuthProvider` context
+- No visual UI is rendered after the loading state (redirects immediately)
+- The `/signin` route is expected by the default popup implementation in `AuthProvider`
+- If you use a different route, update popup calls accordingly
+- The component automatically handles cleanup of sessionStorage flags
+
+## Related
+
+- [CallbackPage](/logto-authkit/api/components/callback-page) - Handles the callback after authentication
+- [AuthProvider](/logto-authkit/api/components/auth-provider) - Configure authentication behavior
+- [useAuth](/logto-authkit/api/hooks/use-auth) - Access authentication state programmatically

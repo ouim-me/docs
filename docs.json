@@ -92,57 +92,57 @@
         ]
       },
       {
-        "tab": "simple-logto",
+        "tab": "logto-authkit",
         "groups": [
           {
             "group": "Get Started",
-            "pages": ["simple-logto/introduction", "simple-logto/installation", "simple-logto/quickstart"]
+            "pages": ["logto-authkit/introduction", "logto-authkit/installation", "logto-authkit/quickstart"]
           },
           {
             "group": "Frontend",
             "pages": [
-              "simple-logto/frontend/auth-provider",
-              "simple-logto/frontend/user-center",
-              "simple-logto/frontend/callback-page",
-              "simple-logto/frontend/use-auth",
-              "simple-logto/frontend/route-protection"
+              "logto-authkit/frontend/auth-provider",
+              "logto-authkit/frontend/user-center",
+              "logto-authkit/frontend/callback-page",
+              "logto-authkit/frontend/use-auth",
+              "logto-authkit/frontend/route-protection"
             ]
           },
           {
-            "group": "Backend",
+            "group": "Server",
             "pages": [
-              "simple-logto/backend/overview",
-              "simple-logto/backend/express-middleware",
-              "simple-logto/backend/nextjs-integration",
-              "simple-logto/backend/generic-usage"
+              "logto-authkit/server/overview",
+              "logto-authkit/server/express-middleware",
+              "logto-authkit/server/nextjs-integration",
+              "logto-authkit/server/generic-usage"
             ]
           },
           {
             "group": "Configuration",
             "pages": [
-              "simple-logto/configuration/bundler-setup",
-              "simple-logto/configuration/guest-mode",
-              "simple-logto/configuration/custom-navigation"
+              "logto-authkit/configuration/bundler-setup",
+              "logto-authkit/configuration/guest-mode",
+              "logto-authkit/configuration/custom-navigation"
             ]
           },
           {
             "group": "Examples",
-            "pages": ["simple-logto/examples/react-spa", "simple-logto/examples/nextjs-app", "simple-logto/examples/protected-routes"]
+            "pages": ["logto-authkit/examples/react-spa", "logto-authkit/examples/nextjs-app", "logto-authkit/examples/protected-routes"]
           },
           {
             "group": "API Reference",
             "pages": [
-              "simple-logto/api/components/auth-provider",
-              "simple-logto/api/components/callback-page",
-              "simple-logto/api/components/sign-in-page",
-              "simple-logto/api/hooks/use-auth",
-              "simple-logto/api/backend/verify-auth",
-              "simple-logto/api/backend/verify-next-auth",
-              "simple-logto/api/backend/create-express-auth-middleware",
-              "simple-logto/api/types/backend-types",
-              "simple-logto/api/types/frontend-types",
-              "simple-logto/api/utilities/bundler-config",
-              "simple-logto/api/utilities/cookie-utils"
+              "logto-authkit/api/components/auth-provider",
+              "logto-authkit/api/components/callback-page",
+              "logto-authkit/api/components/sign-in-page",
+              "logto-authkit/api/hooks/use-auth",
+              "logto-authkit/api/server/verify-auth",
+              "logto-authkit/api/server/verify-next-auth",
+              "logto-authkit/api/server/create-express-auth-middleware",
+              "logto-authkit/api/types/server-types",
+              "logto-authkit/api/types/frontend-types",
+              "logto-authkit/api/utilities/bundler-config",
+              "logto-authkit/api/utilities/cookie-utils"
             ]
           }
         ]

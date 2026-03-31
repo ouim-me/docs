@@ -1,0 +1,264 @@
+---
+title: "Cookie Utilities"
+description: "Client-side cookie management utilities for authentication"
+---
+
+Utilities for managing cookies and JWT tokens in logto-authkit applications.
+
+## Cookie Utilities
+
+General-purpose cookie management functions.
+
+### cookieUtils.setCookie
+
+Set a cookie with the given name, value, and options.
+
+```typescript
+cookieUtils.setCookie(
+  name: string,
+  value: string,
+  options?: CookieOptions
+): void
+```
+
+<ResponseField name="name" type="string" required>
+  The cookie name
+</ResponseField>
+
+<ResponseField name="value" type="string" required>
+  The cookie value
+</ResponseField>
+
+<ResponseField name="options" type="CookieOptions">
+  Cookie configuration options
+</ResponseField>
+
+#### CookieOptions
+
+<ResponseField name="expires" type="Date | number">
+  Expiration date (Date object) or number of days until expiration
+</ResponseField>
+
+<ResponseField name="maxAge" type="number">
+  Maximum age in seconds
+</ResponseField>
+
+<ResponseField name="domain" type="string">
+  Cookie domain
+</ResponseField>
+
+<ResponseField name="path" type="string" default="/">
+  Cookie path
+</ResponseField>
+
+<ResponseField name="secure" type="boolean" default="window.location.protocol === 'https:'">
+  Whether cookie requires HTTPS
+</ResponseField>
+
+<ResponseField name="sameSite" type="'strict' | 'lax' | 'none'" default="lax">
+  SameSite cookie attribute
+</ResponseField>
+
+<ResponseField name="httpOnly" type="boolean">
+  Whether cookie is HTTP-only (not accessible via JavaScript)
+</ResponseField>
+
+**Example:**
+
+```typescript
+import { cookieUtils } from '@ouim/logto-authkit'
+
+// Set a cookie that expires in 7 days
+cookieUtils.setCookie('user_preference', 'dark-mode', {
+  expires: 7,
+  secure: true,
+  sameSite: 'strict'
+})
+
+// Set a cookie with a specific expiration date
+cookieUtils.setCookie('session', 'abc123', {
+  expires: new Date('2026-12-31'),
+  path: '/'
+})
+```
+
+### cookieUtils.getCookie
+
+Get a cookie value by name.
+
+```typescript
+cookieUtils.getCookie(name: string): string | null
+```
+
+<ResponseField name="name" type="string" required>
+  The cookie name to retrieve
+</ResponseField>
+
+**Returns:** `string | null` - The cookie value, or `null` if not found
+
+**Example:**
+
+```typescript
+import { cookieUtils } from '@ouim/logto-authkit'
+
+const preference = cookieUtils.getCookie('user_preference')
+if (preference === 'dark-mode') {
+  // Enable dark mode
+}
+```
+
+### cookieUtils.removeCookie
+
+Remove a cookie by name.
+
+```typescript
+cookieUtils.removeCookie(
+  name: string,
+  options?: RemoveCookieOptions
+): void
+```
+
+<ResponseField name="name" type="string" required>
+  The cookie name to remove
+</ResponseField>
+
+<ResponseField name="options" type="RemoveCookieOptions">
+  Cookie removal options (domain and path must match the original cookie)
+</ResponseField>
+
+#### RemoveCookieOptions
+
+<ResponseField name="domain" type="string">
+  Cookie domain (must match original)
+</ResponseField>
+
+<ResponseField name="path" type="string" default="/">
+  Cookie path (must match original)
+</ResponseField>
+
+**Example:**
+
+```typescript
+import { cookieUtils } from '@ouim/logto-authkit'
+
+cookieUtils.removeCookie('user_preference', { path: '/' })
+```
+
+## JWT Token Utilities
+
+Specialized utilities for managing JWT authentication tokens.
+
+### jwtCookieUtils.saveToken
+
+Save a JWT token to a secure cookie.
+
+```typescript
+jwtCookieUtils.saveToken(token: string): void
+```
+
+<ResponseField name="token" type="string" required>
+  The JWT token to save
+</ResponseField>
+
+**Cookie details:**
+- Name: `logto_authtoken`
+- Expires: 7 days
+- Secure: true (HTTPS only)
+- SameSite: strict
+- Path: /
+
+**Example:**
+
+```typescript
+import { jwtCookieUtils } from '@ouim/logto-authkit'
+
+// After successful authentication
+const token = await getAccessToken()
+jwtCookieUtils.saveToken(token)
+```
+
+### jwtCookieUtils.getToken
+
+Retrieve the JWT token from the cookie.
+
+```typescript
+jwtCookieUtils.getToken(): string | null
+```
+
+**Returns:** `string | null` - The JWT token, or `null` if not found
+
+**Example:**
+
+```typescript
+import { jwtCookieUtils } from '@ouim/logto-authkit'
+
+const token = jwtCookieUtils.getToken()
+if (token) {
+  // Make authenticated API request
+  fetch('/api/user', {
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  })
+}
+```
+
+### jwtCookieUtils.removeToken
+
+Remove the JWT token cookie.
+
+```typescript
+jwtCookieUtils.removeToken(): void
+```
+
+**Example:**
+
+```typescript
+import { jwtCookieUtils } from '@ouim/logto-authkit'
+
+// On sign out
+function handleSignOut() {
+  jwtCookieUtils.removeToken()
+  // Redirect to login page
+}
+```
+
+## Configuration Validation
+
+### validateLogtoConfig
+
+Validate Logto configuration for required fields.
+
+```typescript
+validateLogtoConfig(config: LogtoConfig): void
+```
+
+<ResponseField name="config" type="LogtoConfig" required>
+  The Logto configuration object to validate
+</ResponseField>
+
+**Throws:** `Error` if configuration is invalid or missing required fields
+
+**Example:**
+
+```typescript
+import { validateLogtoConfig } from '@ouim/logto-authkit'
+import type { LogtoConfig } from '@logto/react'
+
+const config: LogtoConfig = {
+  endpoint: 'https://your-tenant.logto.app',
+  appId: 'your-app-id',
+  resources: ['https://api.example.com']
+}
+
+try {
+  validateLogtoConfig(config)
+  console.log('Config is valid')
+} catch (error) {
+  console.error('Invalid config:', error.message)
+}
+```
+
+<Note>
+  The library uses internal utilities for transforming user data and generating guest IDs. These utilities are used automatically by the AuthProvider and do not need to be called directly.
+</Note>

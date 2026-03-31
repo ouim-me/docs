@@ -1,0 +1,270 @@
+---
+title: "Frontend Types"
+description: "TypeScript type definitions for logto-authkit frontend SDK"
+---
+
+Frontend TypeScript types used in logto-authkit React components and hooks.
+
+## User Types
+
+### LogtoUser
+
+Represents an authenticated user in the application.
+
+<ResponseField name="id" type="string" required>
+  Unique identifier for the user
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  Display name of the user
+</ResponseField>
+
+<ResponseField name="email" type="string">
+  Email address of the user
+</ResponseField>
+
+<ResponseField name="avatar" type="string">
+  URL to the user's avatar/profile picture
+</ResponseField>
+
+<ResponseField name="[key: string]" type="any">
+  Additional custom properties from the identity provider
+</ResponseField>
+
+```typescript
+export type LogtoUser = {
+  id: string
+  name?: string
+  email?: string
+  avatar?: string
+  [key: string]: any
+}
+```
+
+## Authentication Types
+
+### AuthMiddleware
+
+Defines the authentication requirement level for a page or route.
+
+```typescript
+export type AuthMiddleware = 'auth' | 'guest' | undefined
+```
+
+- `'auth'` - Requires authenticated user
+- `'guest'` - Allows unauthenticated access (guest mode)
+- `undefined` - No middleware applied
+
+### NavigationOptions
+
+Options for controlling navigation behavior.
+
+<ResponseField name="replace" type="boolean" default={false}>
+  Use `replaceState` instead of `pushState` to avoid adding to browser history
+</ResponseField>
+
+<ResponseField name="force" type="boolean" default={false}>
+  Force navigation even if already on the same page
+</ResponseField>
+
+```typescript
+export interface NavigationOptions {
+  replace?: boolean
+  force?: boolean
+}
+```
+
+### AuthOptions
+
+Configuration options for authentication behavior and redirects.
+
+<ResponseField name="middleware" type="AuthMiddleware">
+  Authentication middleware type to apply
+</ResponseField>
+
+<ResponseField name="redirectTo" type="string">
+  URL to redirect to after authentication
+</ResponseField>
+
+<ResponseField name="redirectIfAuthenticated" type="string">
+  URL to redirect to if user is already authenticated
+</ResponseField>
+
+<ResponseField name="navigationOptions" type="NavigationOptions">
+  Options for controlling navigation behavior
+</ResponseField>
+
+```typescript
+export interface AuthOptions {
+  middleware?: AuthMiddleware
+  redirectTo?: string
+  redirectIfAuthenticated?: string
+  navigationOptions?: NavigationOptions
+}
+```
+
+## Context Types
+
+### AuthContextType
+
+The authentication context type provided by `useAuth()` hook.
+
+<ResponseField name="user" type="LogtoUser | null" required>
+  The currently authenticated user, or `null` if not authenticated
+</ResponseField>
+
+<ResponseField name="isLoadingUser" type="boolean" required>
+  Indicates if user data is currently being loaded
+</ResponseField>
+
+<ResponseField name="signIn" type="(callbackUrl?: string, usePopup?: boolean) => Promise<void>" required>
+  Function to initiate sign-in flow
+  
+  - `callbackUrl` - URL to redirect to after successful sign-in
+  - `usePopup` - Whether to use popup sign-in instead of redirect
+</ResponseField>
+
+<ResponseField name="signOut" type="(options?: { callbackUrl?: string; global?: boolean }) => Promise<void>" required>
+  Function to sign out the current user
+  
+  - `callbackUrl` - URL to redirect to after sign-out
+  - `global` - Whether to perform global sign-out across all sessions
+</ResponseField>
+
+<ResponseField name="refreshAuth" type="() => Promise<void>" required>
+  Function to refresh authentication state and user data
+</ResponseField>
+
+<ResponseField name="enablePopupSignIn" type="boolean">
+  Whether popup sign-in is enabled
+</ResponseField>
+
+```typescript
+export interface AuthContextType {
+  user: LogtoUser | null
+  isLoadingUser: boolean
+  signIn: (callbackUrl?: string, usePopup?: boolean) => Promise<void>
+  signOut: (options?: { callbackUrl?: string; global?: boolean }) => Promise<void>
+  refreshAuth: () => Promise<void>
+  enablePopupSignIn?: boolean
+}
+```
+
+## Component Props
+
+### AuthProviderProps
+
+Props for the `AuthProvider` component.
+
+<ResponseField name="children" type="React.ReactNode" required>
+  Child components to render within the auth context
+</ResponseField>
+
+<ResponseField name="config" type="LogtoConfig" required>
+  Logto configuration object containing `endpoint`, `appId`, and `resources`
+</ResponseField>
+
+<ResponseField name="callbackUrl" type="string">
+  Default callback URL for authentication redirects
+</ResponseField>
+
+<ResponseField name="customNavigate" type="(url: string, options?: NavigationOptions) => void">
+  Custom navigation function (e.g., for React Router integration)
+</ResponseField>
+
+<ResponseField name="enablePopupSignIn" type="boolean">
+  Enable popup-based sign-in flow
+</ResponseField>
+
+```typescript
+export interface AuthProviderProps {
+  children: React.ReactNode
+  config: LogtoConfig
+  callbackUrl?: string
+  customNavigate?: (url: string, options?: NavigationOptions) => void
+  enablePopupSignIn?: boolean
+}
+```
+
+### CallbackPageProps
+
+Props for the `CallbackPage` component.
+
+<ResponseField name="className" type="string">
+  CSS class name for styling the callback page
+</ResponseField>
+
+<ResponseField name="loadingComponent" type="React.ReactNode">
+  Custom component to display during authentication callback processing
+</ResponseField>
+
+<ResponseField name="successComponent" type="React.ReactNode">
+  Custom component to display on successful authentication
+</ResponseField>
+
+<ResponseField name="onSuccess" type="() => void">
+  Callback function executed on successful authentication
+</ResponseField>
+
+<ResponseField name="onError" type="(error: Error) => void">
+  Callback function executed on authentication error
+</ResponseField>
+
+```typescript
+export interface CallbackPageProps {
+  className?: string
+  loadingComponent?: React.ReactNode
+  successComponent?: React.ReactNode
+  onSuccess?: () => void
+  onError?: (error: Error) => void
+}
+```
+
+### AdditionalPage
+
+Defines additional pages/links for UI components.
+
+<ResponseField name="link" type="string" required>
+  URL or path for the page
+</ResponseField>
+
+<ResponseField name="text" type="string" required>
+  Display text for the link
+</ResponseField>
+
+<ResponseField name="icon" type="React.ReactNode">
+  Optional icon element to display with the link
+</ResponseField>
+
+```typescript
+export interface AdditionalPage {
+  link: string
+  text: string
+  icon?: React.ReactNode
+}
+```
+
+## Usage Example
+
+```typescript
+import type { LogtoUser, AuthOptions, AuthContextType } from '@ouim/logto-authkit'
+import { useAuth } from '@ouim/logto-authkit'
+
+function UserProfile() {
+  const { user, signOut }: AuthContextType = useAuth()
+  
+  if (!user) return null
+  
+  const logtoUser: LogtoUser = user
+  
+  return (
+    <div>
+      <h1>{logtoUser.name}</h1>
+      <p>{logtoUser.email}</p>
+      <button onClick={() => signOut({ callbackUrl: '/' })}>
+        Sign Out
+      </button>
+    </div>
+  )
+}
+```

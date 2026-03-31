@@ -1,0 +1,116 @@
+---
+title: Installation
+description: Install logto-authkit using your preferred package manager
+---
+
+# Installation
+
+logto-authkit is available as a single npm package that includes both frontend and server features.
+
+## Install the package
+
+<CodeGroup>
+
+```bash npm
+npm install @ouim/logto-authkit
+```
+
+```bash yarn
+yarn add @ouim/logto-authkit
+```
+
+```bash pnpm
+pnpm add @ouim/logto-authkit
+```
+
+</CodeGroup>
+
+## Peer dependencies
+
+logto-authkit requires the following peer dependencies for frontend features:
+
+- `@logto/react` - ^3.0.0 || ^4.0.0
+- `react` - ^17.0.0 || ^19.0.0
+- `react-dom` - ^17.0.0 || ^19.0.0
+
+These should be installed automatically by your package manager, but if not, install them manually:
+
+<CodeGroup>
+
+```bash npm
+npm install @logto/react react react-dom
+```
+
+```bash yarn
+yarn add @logto/react react react-dom
+```
+
+```bash pnpm
+pnpm add @logto/react react react-dom
+```
+
+</CodeGroup>
+
+<Note>
+  Server features work independently and don't require React dependencies.
+</Note>
+
+## Package exports
+
+logto-authkit provides three main exports:
+
+### Main entry (frontend)
+
+```typescript
+import { AuthProvider, useAuth, UserCenter, CallbackPage } from '@ouim/logto-authkit'
+```
+
+Includes all frontend components and hooks for React applications.
+
+### Server entry
+
+```typescript
+import { verifyAuth, createExpressAuthMiddleware, verifyNextAuth } from '@ouim/logto-authkit/server'
+```
+
+Includes JWT verification, Express middleware, and Next.js helpers.
+
+### Bundler config entry
+
+```typescript
+import { viteConfig, webpackConfig, nextjsConfig } from '@ouim/logto-authkit/bundler-config'
+```
+
+Pre-configured bundler settings for Vite, Webpack, and Next.js.
+
+<Tip>
+  When editing build-time scripts, import from `@ouim/logto-authkit/bundler-config` to avoid executing the main library bundle.
+</Tip>
+
+## TypeScript support
+
+logto-authkit is written in TypeScript and provides comprehensive type definitions out of the box.
+
+```typescript
+import type {
+  LogtoUser,
+  AuthOptions,
+  AuthMiddleware,
+  CallbackPageProps,
+  NavigationOptions,
+  AdditionalPage
+} from '@ouim/logto-authkit'
+
+// Server types
+import type {
+  AuthContext,
+  AuthPayload,
+  VerifyAuthOptions
+} from '@ouim/logto-authkit/server'
+```
+
+## Next steps
+
+<Card title="Quick start" icon="rocket" href="/logto-authkit/quickstart">
+  Get up and running with authentication in minutes
+</Card>

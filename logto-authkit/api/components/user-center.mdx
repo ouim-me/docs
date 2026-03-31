@@ -1,0 +1,157 @@
+---
+title: UserCenter
+description: A dropdown menu component that displays user information and authentication controls.
+---
+
+## Overview
+
+The `UserCenter` component provides a pre-built UI for displaying user information, managing authentication, and navigating to additional pages. It shows a user avatar with a dropdown menu containing sign-in/sign-out controls.
+
+## Props
+
+<ParamField path="className" type="string" default="''">
+  Additional CSS classes to apply to the avatar wrapper.
+</ParamField>
+
+<ParamField path="globalSignOut" type="boolean" default="true">
+  Whether to perform a global sign-out (logs out from Logto ecosystem) or local sign-out (only clears local session).
+  
+  - `true`: Global sign-out, logs user out across all applications
+  - `false`: Local sign-out, only clears the current session
+</ParamField>
+
+<ParamField path="themeClassnames" type="string" default="'dark:bg-[#171717] dark:text-slate-200 bg-white text-slate-900'">
+  CSS classes for theming the dropdown menu. Supports dark mode and custom styling.
+</ParamField>
+
+<ParamField path="signoutCallbackUrl" type="string">
+  The URL to redirect to after sign-out. Defaults to the current page URL if not specified.
+</ParamField>
+
+<ParamField path="additionalPages" type="AdditionalPage[]" default="[]">
+  Array of additional menu items to display in the dropdown above the sign-out button.
+  
+  ```typescript
+  interface AdditionalPage {
+    link: string          // URL to navigate to
+    text: string          // Display text for the menu item
+    icon?: React.ReactNode // Optional icon element
+  }
+  ```
+</ParamField>
+
+## Usage
+
+### Basic Usage
+
+```tsx
+import { UserCenter } from '@ouim/logto-authkit'
+
+function Header() {
+  return (
+    <header>
+      <UserCenter />
+    </header>
+  )
+}
+```
+
+### With Additional Pages
+
+```tsx
+import { UserCenter } from '@ouim/logto-authkit'
+import { Settings, CreditCard } from 'lucide-react'
+
+function Header() {
+  return (
+    <header>
+      <UserCenter 
+        additionalPages={[
+          {
+            link: '/settings',
+            text: 'Settings',
+            icon: <Settings />
+          },
+          {
+            link: '/billing',
+            text: 'Billing',
+            icon: <CreditCard />
+          }
+        ]}
+      />
+    </header>
+  )
+}
+```
+
+### With Custom Styling
+
+```tsx
+import { UserCenter } from '@ouim/logto-authkit'
+
+function Header() {
+  return (
+    <header>
+      <UserCenter 
+        className="ring-2 ring-blue-500"
+        themeClassnames="bg-gray-800 text-white"
+      />
+    </header>
+  )
+}
+```
+
+### With Local Sign-Out
+
+```tsx
+import { UserCenter } from '@ouim/logto-authkit'
+
+function Header() {
+  return (
+    <header>
+      <UserCenter 
+        globalSignOut={false}
+        signoutCallbackUrl="/goodbye"
+      />
+    </header>
+  )
+}
+```
+
+## Behavior
+
+### Authenticated User
+
+When a user is signed in, the component displays:
+- User avatar (or initials if no avatar is available)
+- User's name and email in the dropdown header
+- Additional menu items (if configured)
+- Sign-out button
+
+### Unauthenticated User
+
+When no user is signed in, the component displays:
+- Generic user icon
+- "Sign in to your account" prompt
+- Sign-in button
+
+### Loading State
+
+While authentication state is loading, the component shows:
+- Pulsing skeleton avatar (prevents hydration mismatch)
+
+## Features
+
+- **SSR Safe**: Handles server-side rendering without hydration mismatches
+- **Auto Avatar**: Displays user avatar or generates initials from user name
+- **Dark Mode**: Built-in dark mode support with customizable theme classes
+- **Extensible**: Support for additional menu items with custom icons
+- **Responsive**: Dropdown aligns to the right and adapts to screen size
+- **Accessible**: Uses radix-ui primitives for accessibility
+
+## Notes
+
+- The component must be used within an `AuthProvider` context
+- Icons from `additionalPages` are cloned with standardized sizing classes
+- The component waits for client-side mounting to prevent SSR hydration issues
+- Avatar hover effects include a ring animation for better UX
